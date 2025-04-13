@@ -1,0 +1,49 @@
+# docker-compose.yml
+version: '3.8' # Specify docker-compose version
+
+services:
+  # Service 1: Our Flask Web Application
+  web:
+    build: . # Build the image from the Dockerfile in the current directory
+    image: todo-app # Optionally name the image built
+    container_name: todo_web_app # Name for the running container
+    ports:
+      - "5001:5000" # Map port 5001 on the host to port 5000 in the container
+                   # Using 5001 on host to avoid potential conflicts if 5000 is used
+    environment:
+      # Pass database connection details to the Flask app
+      # Note: DB_HOST is set to the service name 'db' - Docker Compose handles the networking!
+      - DB_HOST=db
+      - DB_NAME=todos
+      - DB_USER=user
+      - DB_PASS=password
+      # Ensure Python output is shown immediately in logs
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - db # Wait for the 'db' service to be healthy before starting 'web'
+    restart: unless-stopped # Restart policy
+
+  # Service 2: PostgreSQL Database
+  db:
+    image: postgres:14-alpine # Use official PostgreSQL image (alpine version is smaller)
+    container_name: todo_db
+    environment:
+      # Environment variables required by the postgres image to initialize the DB
+      POSTGRES_DB: todos
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/ # Persist database data using a named volume
+    ports:
+      # Optional: Expose port 5432 if you want to connect directly from host machine (e.g., for debugging)
+       - "5432:5432"
+    healthcheck: # Check if the database is ready to accept connections
+        test: ["CMD-SHELL", "pg_isready -U user -d todos"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+    restart: unless-stopped # Restart policy
+
+# Define the named volume for data persistence
+volumes:
+  postgres_data:
