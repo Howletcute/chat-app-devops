@@ -29,3 +29,9 @@ variable "machine_type" {
   type        = string
   default     = "e2-micro" # Always Free eligible machine type
 }
+
+variable "ssh_source_ip" {
+  description = "Your public IP address to allow SSH access from (use CIDR notation, e.g., 'YOUR_IP/32'). Find yours at https://whatismyipaddress.com/"
+  type        = string
+  # No default value - Terraform will require this variable to be set
+}
