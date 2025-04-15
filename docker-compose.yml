@@ -4,8 +4,7 @@ version: '3.8' # Specify docker-compose version
 services:
   # Service 1: Our Flask Web Application
   web:
-    build: . # Build the image from the Dockerfile in the current directory
-    image: todo-app # Optionally name the image built
+    image: howletcute/todo-app:latest # Optionally name the image built
     container_name: todo_web_app # Name for the running container
     ports:
       - "5001:5000" # Map port 5001 on the host to port 5000 in the container
@@ -20,7 +19,8 @@ services:
       # Ensure Python output is shown immediately in logs
       - PYTHONUNBUFFERED=1
     depends_on:
-      - db # Wait for the 'db' service to be healthy before starting 'web'
+      db:
+        condition: service_healthy
     restart: unless-stopped # Restart policy
 
   # Service 2: PostgreSQL Database
