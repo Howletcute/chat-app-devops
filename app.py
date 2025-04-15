@@ -72,7 +72,7 @@ HTML_TEMPLATE = """
 <html>
 <head><title>Simple TODO App</title></head>
 <body>
-    <h1>My Awesome TODO List (CI/CD Test)</h1>
+    <h1>Hello napstacube</h1>
     <ul>
         {% for todo in todos %}
             <li>{{ todo[1] }} (ID: {{ todo[0] }})</li> {# Accessing tuple elements #}
