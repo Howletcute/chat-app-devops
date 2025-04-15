@@ -1,0 +1,33 @@
+# ansible/deploy-app.yml
+---
+- name: Deploy Todo Application Stack
+  hosts: gcp_vms
+  become: no # Run as the ansible_user (who should be in the docker group)
+  vars:
+    # Define deployment directory in the remote user's home
+    app_dir: "/home/{{ ansible_user }}/todo-app"
+  tasks:
+    - name: Ensure app directory exists on VM
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy updated docker-compose.yml to VM
+      ansible.builtin.copy:
+        src: ../docker-compose.yml # Path relative to the playbook file
+        dest: "{{ app_dir }}/docker-compose.yml"
+        mode: '0644'
+
+    - name: Pull latest images defined in docker-compose.yml
+      ansible.builtin.command:
+        cmd: "docker compose pull"
+        chdir: "{{ app_dir }}" # Run in the directory containing docker-compose.yml
+      changed_when: false # pull doesn't change state in Ansible terms
+
+    - name: Start application stack with docker compose
+      ansible.builtin.command:
+        # Use 'up -d' to start/update in detached mode
+        cmd: "docker compose up -d"
+        chdir: "{{ app_dir }}" # Run in the directory containing docker-compose.yml
+      changed_when: true # Starting/updating services changes state
