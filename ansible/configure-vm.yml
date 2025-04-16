@@ -37,33 +37,49 @@
         # TODO: Replace this deprecated apt-key method with a working 'signed-by=' approach
         #       or use a pre-baked image with Docker installed. This is a temporary
         #       workaround due to persistent apt GPG verification issues in this specific environment.
-    - name: Add Docker's GPG key via curl piped to apt-key (Deprecated)
-      ansible.builtin.shell:
-        # Directly pipe the downloaded key into apt-key add
-        # The '-' tells apt-key to read from standard input
-        cmd: curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
-        executable: /bin/bash # Good practice to specify executable
-      # Removed 'warn', 'register', and 'changed_when' for simplicity
+        # --- Manage Docker GPG Key (Using /usr/share/keyrings) ---
+    - name: Ensure /usr/share/keyrings directory exists
+      ansible.builtin.file:
+        path: /usr/share/keyrings # Target path for key
+        state: directory
+        mode: "0755"
+        owner: root
+        group: root
 
-    - name: Add Docker repository source list
+    - name: Download Docker's official GPG key to a temporary location
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /tmp/docker_gpg_key
+        mode: "0644"
+
+    - name: Dearmor the GPG key and place it in /usr/share/keyrings
+      ansible.builtin.command:
+        # Dearmor key into the target path
+        cmd: gpg --dearmor -o /usr/share/keyrings/docker.gpg /tmp/docker_gpg_key
+        creates: /usr/share/keyrings/docker.gpg # Only run if key doesn't exist
+      changed_when: true # Assume change if command runs
+
+    - name: Ensure correct permissions on the Docker GPG key
+      ansible.builtin.file:
+        path: /usr/share/keyrings/docker.gpg # Target path
+        mode: "0644"
+        owner: root
+        group: root
+        state: file # Ensure it's a file
+
+    - name: Remove temporary GPG key file
+      ansible.builtin.file:
+        path: /tmp/docker_gpg_key
+        state: absent
+
+    # --- Add Docker Repo (Referencing key in /usr/share/keyrings) ---
+    - name: Add Docker apt repository
       ansible.builtin.apt_repository:
-        # Using apt-key, so NO signed-by= needed here
-        repo: "deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        # Re-add the signed-by attribute pointing to the key path
+        repo: "deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }} signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
         state: present
         filename: docker
-        update_cache: yes # Update cache immediately after adding repo
-
-    # --- Install Docker ---
-    - name: Install Docker Engine, CLI, Containerd, and Compose plugin
-      ansible.builtin.apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: present
-        # Cache was updated in the previous step
+        update_cache: yes # Update cache immediately
 
     # --- Install Docker ---
     - name: Update apt cache after adding repo
