@@ -122,26 +122,29 @@ This outlines the process to deploy the application from this repository to a si
 
 ## Project Structure
 
+```text
+.
 ├── .github/workflows/      # GitHub Actions CI/CD pipeline
 │   └── deploy.yml
 ├── ansible/                # Ansible configuration
-│   ├── configure-vm.yml    # Playbook to setup Docker on VM
-│   ├── deploy-app.yml      # Playbook for manual app deployment (superseded by CI/CD)
+│   ├── configure-vm.yml    # Playbook to setup Docker on VM (v1.0 state)
+│   ├── deploy-app.yml      # Playbook for app deployment (used by CI/CD logic)
 │   └── inventory.ini       # Ansible inventory file
 ├── templates/              # Flask HTML templates
 │   ├── chat.html
 │   └── index.html
 ├── terraform/              # Terraform infrastructure code
-│   ├── backend.tf
-│   ├── main.tf
-│   ├── outputs.tf
-│   ├── providers.tf
-│   └── variables.tf
+│   ├── backend.tf          # GCS backend configuration
+│   ├── gke.tf              # GKE cluster definition (Added in feature branch)
+│   ├── main.tf             # Core resources (VM, Firewall in v1.0)
+│   ├── outputs.tf          # Terraform outputs
+│   ├── providers.tf        # Terraform provider configuration
+│   └── variables.tf        # Terraform input variables
 ├── .env                    # Local environment variables (Gitignored)
 ├── .gitignore
 ├── app.py                  # Main Flask application code
 ├── Dockerfile              # Docker build instructions
-├── docker-compose.yml      # Docker Compose for local dev & VM deployment
+├── docker-compose.yml      # Docker Compose configuration
 ├── README.md               # This file
 └── requirements.txt        # Python dependencies
 
