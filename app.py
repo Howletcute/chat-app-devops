@@ -1,145 +1,148 @@
 # app.py
 import os
-import psycopg2
-from flask import Flask, request, redirect, url_for, render_template_string
-import time # Import time for retry logic
+from flask import Flask, render_template, request, session, redirect, url_for
+from flask_socketio import SocketIO, emit, join_room, leave_room
+import redis
+from dotenv import load_dotenv
+
+load_dotenv() # Load environment variables from .env file for local dev
 
 app = Flask(__name__)
+# Use environment variable for secret key or fallback for dev
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_very_secret_key_dev')
 
-# --- Database Configuration ---
-# Get DB details from environment variables, with defaults for local use
-# We'll use 'postgres' as the default host, assuming Docker networking later.
-DB_HOST = os.environ.get('DB_HOST', 'postgres')
-DB_PORT = os.environ.get('DB_PORT', '5432')
-DB_NAME = os.environ.get('DB_NAME', 'todos')
-DB_USER = os.environ.get('DB_USER', 'user') # Example user
-DB_PASS = os.environ.get('DB_PASS', 'password') # Example password
+# Redis connection details from environment variables
+REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+# REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', None) # Add if your Redis needs a password
 
-def get_db_connection():
-    """Establishes connection to the PostgreSQL database with retries."""
-    retries = 5
-    delay = 1 # seconds
-    while retries > 0:
-        try:
-            conn = psycopg2.connect(
-                host=DB_HOST,
-                port=DB_PORT,
-                dbname=DB_NAME,
-                user=DB_USER,
-                password=DB_PASS,
-                connect_timeout=3 # Add a connection timeout
-            )
-            print("Database connection successful.")
-            return conn
-        except psycopg2.OperationalError as e:
-            retries -= 1
-            print(f"Database connection failed: {e}. Retrying in {delay}s... ({retries} retries left)")
-            if retries == 0:
-                print("Max retries reached. Could not connect to database.")
-                return None
-            time.sleep(delay)
-            delay *= 2 # Exponential backoff (optional)
+# Initialize Flask-SocketIO - use 'eventlet' for async mode
+# Connect to Redis for message queue (optional but good for scaling)
+redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+# If password needed: redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
+socketio = SocketIO(app, async_mode='eventlet', message_queue=redis_url)
 
-def init_db():
-    """Initializes the database table if it doesn't exist."""
-    conn = get_db_connection()
-    if conn is None:
-        print("Skipping DB initialization due to connection error.")
-        return
-    try:
-        with conn.cursor() as cur:
-            # Create table only if it doesn't exist
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS todos (
-                    id SERIAL PRIMARY KEY,
-                    task TEXT NOT NULL,
-                    added_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-        conn.commit() # Make sure changes are saved
-        print("Database table 'todos' checked/created successfully.")
-    except psycopg2.Error as e:
-        print(f"Error initializing database table: {e}")
-        conn.rollback() # Roll back changes on error
-    finally:
-        if conn:
-            conn.close() # Always close the connection
+# Connect to Redis for storing messages and users
+try:
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=1, decode_responses=True) # Use DB 1 for app data
+    redis_client.ping()
+    print("Connected to Redis successfully!")
+except redis.exceptions.ConnectionError as e:
+    print(f"Could not connect to Redis: {e}")
+    redis_client = None # Handle gracefully if Redis isn't available
 
-# --- Simple HTML Template ---
-# (For a real app, use Flask's template engine with separate HTML files)
-HTML_TEMPLATE = """
-<!doctype html>
-<html>
-<head><title>Simple TODO App</title></head>
-<body>
-    <h1>Tom Riddle Diary</h1>
-    <ul>
-        {% for todo in todos %}
-            <li>{{ todo[1] }} (ID: {{ todo[0] }})</li> {# Accessing tuple elements #}
-        {% else %}
-            <li>No tasks yet! Add one below.</li>
-        {% endfor %}
-    </ul>
-    <h2>Add New Task</h2>
-    <form action="/add" method="post">
-        <input type="text" name="task" placeholder="Enter new task description" required>
-        <button type="submit">Add Task</button>
-    </form>
-</body>
-</html>
-"""
+# --- Constants ---
+GENERAL_ROOM = "general_chat"
+MESSAGE_HISTORY_KEY = f"room:{GENERAL_ROOM}:messages" # Redis list key
+ONLINE_USERS_KEY = "online_users" # Redis set key
+MAX_MESSAGES = 50 # Max message history to keep
 
-# --- Flask Routes ---
-@app.route('/')
+# --- Helper Functions ---
+def add_message(nickname, msg):
+    if redis_client:
+        message_data = f"{nickname}: {msg}"
+        # Add message to the start of the list
+        redis_client.lpush(MESSAGE_HISTORY_KEY, message_data)
+        # Trim the list to keep only the last MAX_MESSAGES
+        redis_client.ltrim(MESSAGE_HISTORY_KEY, 0, MAX_MESSAGES - 1)
+
+def get_message_history():
+    if redis_client:
+        # Get the last MAX_MESSAGES (they are stored newest first)
+        return redis_client.lrange(MESSAGE_HISTORY_KEY, 0, MAX_MESSAGES - 1)
+    return []
+
+def add_online_user(nickname):
+    if redis_client and nickname:
+        redis_client.sadd(ONLINE_USERS_KEY, nickname)
+
+def remove_online_user(nickname):
+     if redis_client and nickname:
+        redis_client.srem(ONLINE_USERS_KEY, nickname)
+
+def get_online_users():
+     if redis_client:
+        users = list(redis_client.smembers(ONLINE_USERS_KEY))
+        return sorted(users) # Sort for consistent display
+     return []
+
+# --- HTTP Routes ---
+@app.route('/', methods=['GET'])
 def index():
-    """Displays the list of TODO items."""
-    todos_list = []
-    conn = get_db_connection()
-    if conn:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id, task FROM todos ORDER BY added_on DESC;")
-                todos_list = cur.fetchall() # Fetch all rows
-        except psycopg2.Error as e:
-            print(f"Error fetching todos: {e}")
-            # Render template even if DB fetch fails, showing empty list or error
-        finally:
-            if conn:
-                conn.close()
+    """Serves the nickname entry page."""
+    return render_template('index.html')
 
-    # Render the HTML template, passing the list of todos
-    return render_template_string(HTML_TEMPLATE, todos=todos_list)
+@app.route('/chat', methods=['POST'])
+def enter_chat():
+    """Stores nickname in session and redirects to chat page."""
+    nickname = request.form.get('nickname')
+    if not nickname:
+        return redirect(url_for('index')) # Redirect back if no nickname
+    session['nickname'] = nickname # Store nickname in user's session
+    return redirect(url_for('chat'))
 
-@app.route('/add', methods=['POST'])
-def add_todo():
-    """Adds a new TODO item."""
-    new_task = request.form.get('task') # Get task from form data
-    if new_task: # Basic validation: check if task is not empty
-        conn = get_db_connection()
-        if conn:
-            try:
-                with conn.cursor() as cur:
-                    # Use parameterized query to prevent SQL injection
-                    cur.execute("INSERT INTO todos (task) VALUES (%s);", (new_task,))
-                conn.commit() # Save the changes
-                print(f"Added task: {new_task}")
-            except psycopg2.Error as e:
-                print(f"Error adding task: {e}")
-                conn.rollback() # Roll back on error
-            finally:
-                if conn:
-                    conn.close()
+@app.route('/chat', methods=['GET'])
+def chat():
+    """Serves the main chat page."""
+    nickname = session.get('nickname')
+    if not nickname:
+        return redirect(url_for('index')) # Redirect if no nickname in session
+    return render_template('chat.html', nickname=nickname)
+
+# --- SocketIO Event Handlers ---
+@socketio.on('connect')
+def handle_connect():
+    """Handles a new client connection."""
+    nickname = session.get('nickname') # Get nickname from session
+    if nickname:
+        join_room(GENERAL_ROOM) # Add user to the chat room
+        add_online_user(nickname)
+        print(f'Client connected: {nickname} ({request.sid})')
+        # Send status message to room
+        emit('status', {'msg': f'{nickname} has entered the chat.'}, to=GENERAL_ROOM)
+        # Send current user list to everyone
+        emit('user_list_update', get_online_users(), broadcast=True)
+        # Send message history to the connecting client ONLY
+        history = get_message_history()
+        history.reverse() # Reverse to show oldest first
+        for msg_data in history:
+             # Parse nickname and message (simple split)
+             parts = msg_data.split(":", 1)
+             hist_nick = parts[0]
+             hist_msg = parts[1].strip() if len(parts) > 1 else ""
+             emit('chat_message', {'nickname': hist_nick, 'msg': hist_msg}, room=request.sid)
     else:
-        print("Attempted to add an empty task.")
+        print(f'Anonymous client connected ({request.sid}), nickname needed.')
+        # Could potentially disconnect or handle differently
 
-    # Redirect back to the index page to show the updated list
-    return redirect(url_for('index'))
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handles a client disconnection."""
+    nickname = session.get('nickname') # Get nickname from session
+    if nickname:
+        leave_room(GENERAL_ROOM) # Remove user from room
+        remove_online_user(nickname)
+        print(f'Client disconnected: {nickname} ({request.sid})')
+        # Send status message
+        emit('status', {'msg': f'{nickname} has left the chat.'}, to=GENERAL_ROOM, skip_sid=request.sid) # Don't send to disconnected user
+        # Send updated user list
+        emit('user_list_update', get_online_users(), broadcast=True)
+    else:
+         print(f'Anonymous client disconnected ({request.sid})')
+
+@socketio.on('new_message')
+def handle_new_message(data):
+    """Handles receiving a new message from a client."""
+    nickname = data.get('nickname', 'Anonymous')
+    msg = data.get('msg', '')
+    if msg:
+        print(f'Message from {nickname}: {msg}')
+        add_message(nickname, msg)
+        # Broadcast message to everyone in the room including sender
+        emit('chat_message', {'nickname': nickname, 'msg': msg}, to=GENERAL_ROOM)
 
 # --- Main Execution ---
-if __name__ == "__main__":
-    print("Attempting to initialize database...")
-    init_db() # Try to create the table if it doesn't exist on startup
-    print("Starting Flask development server...")
-    # Run the app, listening on all interfaces (0.0.0.0) on port 5000.
-    # debug=True enables auto-reloading and provides detailed error pages (disable in production)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+if __name__ == '__main__':
+    print("Starting Flask-SocketIO server with eventlet...")
+    # Run with eventlet server for WebSocket support
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)

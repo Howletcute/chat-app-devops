@@ -1,2 +1,5 @@
 flask
-psycopg2-binary # Provides the PostgreSQL driver
+flask-socketio
+redis
+python-dotenv # For local .env file loading
+eventlet      # WebSocket server needed for Flask-SocketIO

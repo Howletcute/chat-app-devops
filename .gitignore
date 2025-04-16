@@ -178,3 +178,11 @@ terraform.tfvars
 *.tfstate
 *.tfstate.*
 .terraform/
+
+# Local app.py tests
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/

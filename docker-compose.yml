@@ -1,49 +1,32 @@
 # docker-compose.yml
-version: '3.8' # Specify docker-compose version
+# version: '3.8' # Remove obsolete version tag
 
 services:
-  # Service 1: Our Flask Web Application
   web:
-    image: howletcute/todo-app:latest # Optionally name the image built
-    container_name: todo_web_app # Name for the running container
+    build: . # Build from Dockerfile again
+    image: howletcute/todo-app:latest # Or change tag to chat-app if you prefer
+    container_name: chat_web_app # Renamed container
     ports:
-      - "5001:5000" # Map port 5001 on the host to port 5000 in the container
-                   # Using 5001 on host to avoid potential conflicts if 5000 is used
+      - "5001:5000" # Keep host port 5001 mapped to container 5000
     environment:
-      # Pass database connection details to the Flask app
-      # Note: DB_HOST is set to the service name 'db' - Docker Compose handles the networking!
-      - DB_HOST=db
-      - DB_NAME=todos
-      - DB_USER=user
-      - DB_PASS=password
-      # Ensure Python output is shown immediately in logs
+      # Point to the redis service named 'db' below
+      - REDIS_HOST=db
+      - REDIS_PORT=6379
+      # Set a secret key for Flask session management (use Docker secrets in prod)
+      - SECRET_KEY=compose_secret_key_!@#_needs_changing_in_prod
       - PYTHONUNBUFFERED=1
     depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped # Restart policy
+      - db # Simple dependency is enough for Redis
+    restart: unless-stopped
 
-  # Service 2: PostgreSQL Database
-  db:
-    image: postgres:14-alpine # Use official PostgreSQL image (alpine version is smaller)
-    container_name: todo_db
-    environment:
-      # Environment variables required by the postgres image to initialize the DB
-      POSTGRES_DB: todos
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+  db: # Renamed service to 'db', but using Redis image
+    image: redis:7-alpine # Use official Redis alpine image
+    container_name: chat_redis_db # Renamed container
+    expose: # Only expose port internally, no need to map to host usually
+      - "6379"
     volumes:
-      - postgres_data:/var/lib/postgresql/data/ # Persist database data using a named volume
-    ports:
-      # Optional: Expose port 5432 if you want to connect directly from host machine (e.g., for debugging)
-       - "5432:5432"
-    healthcheck: # Check if the database is ready to accept connections
-        test: ["CMD-SHELL", "pg_isready -U user -d todos"]
-        interval: 10s
-        timeout: 5s
-        retries: 5
-    restart: unless-stopped # Restart policy
+      - redis_data:/data # Persist redis data
+    restart: unless-stopped
 
-# Define the named volume for data persistence
 volumes:
-  postgres_data:
+  redis_data: # Define volume for redis
