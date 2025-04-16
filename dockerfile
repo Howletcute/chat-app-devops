@@ -10,18 +10,18 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --trusted-host pypi.python.org -r requirements.txt
 
-# 4. Copy the rest of the application code, including templates
+# 4. Copy the rest of the application code (app.py, templates/)
 COPY . .
 
 # 5. Make port 5000 available
 EXPOSE 5000
 
-# 6. Define environment variables (optional but good practice)
+# 6. Define environment variables
 ENV FLASK_APP=app.py
-ENV FLASK_RUN_HOST=0.0.0.0
-ENV PYTHONUNBUFFERED=1 
-# Ensure logs appear immediately
+ENV PYTHONUNBUFFERED=1
 
-# 7. Define the command to run app with eventlet
-# Use eventlet directly as recommended by Flask-SocketIO docs for deployment
-CMD ["eventlet", "wsgi.py"]
+# 7. Define the command to run app using gunicorn with eventlet worker
+# Bind to 0.0.0.0:5000 inside the container
+# Use 1 worker (-w 1) for simplicity for now
+# 'app:app' tells gunicorn to load the 'app' instance from the 'app.py' file
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "app:app"]

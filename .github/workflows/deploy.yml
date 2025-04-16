@@ -29,7 +29,7 @@ jobs:
           file: ./Dockerfile # Path to Dockerfile
           platforms: linux/amd64 # Target architecture for the VM
           push: true # Push the image to registry
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/todo-app:latest # Tag as latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/chat-app:latest # Tag as latest
 
   deploy:
     name: Deploy to GCP VM

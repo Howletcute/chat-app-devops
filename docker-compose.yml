@@ -4,7 +4,7 @@
 services:
   web:
     build: . # Build from Dockerfile again
-    image: howletcute/todo-app:latest # Or change tag to chat-app if you prefer
+    image: howletcute/chat-app:latest # Or change tag to chat-app if you prefer
     container_name: chat_web_app # Renamed container
     ports:
       - "5001:5000" # Keep host port 5001 mapped to container 5000
