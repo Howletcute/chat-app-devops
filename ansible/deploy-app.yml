@@ -25,9 +25,22 @@
         chdir: "{{ app_dir }}" # Run in the directory containing docker-compose.yml
       changed_when: false # pull doesn't change state in Ansible terms
 
+    - name: Stop and remove existing services (if any)
+      ansible.builtin.command:
+        cmd: "docker compose down --remove-orphans"
+        chdir: "{{ app_dir }}"
+      register: down_result
+      changed_when: "'Removing' in down_result.stderr or 'Stopping' in down_result.stderr" # Mark changed if it actually removes/stops something
+      ignore_errors: yes # Don't fail if there's nothing to stop/remove  
+
     - name: Start application stack with docker compose
       ansible.builtin.command:
         # Use 'up -d' to start/update in detached mode
         cmd: "docker compose up -d"
         chdir: "{{ app_dir }}" # Run in the directory containing docker-compose.yml
       changed_when: true # Starting/updating services changes state
+
+    - name: Clean up old Docker images
+      ansible.builtin.command:
+        cmd: "docker image prune -af" # Added -a to prune dangling *and* unused
+      changed_when: false  
