@@ -14,10 +14,10 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_very_secret_key_dev')
 
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
-redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0" # For SocketIO message queue
 socketio = SocketIO(app, async_mode='eventlet', message_queue=redis_url)
 
-# Use separate Redis DB for app data vs message queue
+# Use separate Redis DB for app data
 try:
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=1, decode_responses=True)
     redis_client.ping()
@@ -29,7 +29,6 @@ except redis.exceptions.ConnectionError as e:
 # --- Constants ---
 GENERAL_ROOM = "general_chat"
 MESSAGE_HISTORY_KEY = f"room:{GENERAL_ROOM}:messages"
-ONLINE_USERS_KEY = "online_users" # Set of nicknames
 SID_NICKNAME_MAP_KEY = "sid_nickname_map" # Hash mapping session ID to nickname
 MAX_MESSAGES = 50
 
@@ -45,26 +44,37 @@ def get_message_history():
         return redis_client.lrange(MESSAGE_HISTORY_KEY, 0, MAX_MESSAGES - 1)
     return []
 
+# Add user SID and Nickname to the mapping
 def add_online_user(sid, nickname):
     if redis_client and nickname and sid:
-        redis_client.sadd(ONLINE_USERS_KEY, nickname)
-        redis_client.hset(SID_NICKNAME_MAP_KEY, sid, nickname) # Map SID to nickname
+        redis_client.hset(SID_NICKNAME_MAP_KEY, sid, nickname)
+        logging.info(f"Mapped SID {sid} to nickname {nickname}")
 
+# Remove user by SID and return the nickname found
 def remove_online_user(sid):
      if redis_client and sid:
-        nickname = redis_client.hget(SID_NICKNAME_MAP_KEY, sid) # Get nickname using SID
+        nickname = redis_client.hget(SID_NICKNAME_MAP_KEY, sid)
         if nickname:
-            redis_client.srem(ONLINE_USERS_KEY, nickname)
             redis_client.hdel(SID_NICKNAME_MAP_KEY, sid) # Remove mapping
-            return nickname # Return the nickname that was removed
-        return None
+            logging.info(f"Removed SID {sid} (nickname {nickname}) from map")
+            return nickname
+        else:
+            logging.warning(f"Tried to remove SID {sid}, but not found in map.")
+            return None
+     return None
 
+# Get online users by retrieving all nicknames from the SID map
 def get_online_users():
      if redis_client:
-        users = list(redis_client.smembers(ONLINE_USERS_KEY))
-        return sorted(users)
+        # Get all nicknames (values) from the SID->Nickname hash map
+        users = redis_client.hvals(SID_NICKNAME_MAP_KEY)
+        # Get unique names and sort them for display
+        unique_users = sorted(list(set(users)))
+        logging.info(f"Current online users (from SID map): {unique_users}")
+        return unique_users
      return []
 
+# Helper to get nickname associated with a specific connection ID
 def get_nickname_from_sid(sid):
     if redis_client and sid:
         return redis_client.hget(SID_NICKNAME_MAP_KEY, sid)
@@ -73,95 +83,99 @@ def get_nickname_from_sid(sid):
 # --- HTTP Routes ---
 @app.route('/', methods=['GET'])
 def index():
+    """Serves the nickname entry page."""
     return render_template('index.html')
 
 @app.route('/chat', methods=['POST'])
 def enter_chat():
+    """Stores nickname temporary in session JUST for redirect, allows duplicates."""
     nickname = request.form.get('nickname')
-    if not nickname or (redis_client and redis_client.sismember(ONLINE_USERS_KEY, nickname)):
-         # Redirect back if nickname missing or already taken (basic check)
-         logging.warning(f"Nickname '{nickname}' invalid or already taken.")
-         return redirect(url_for('index')) # Ideally show an error message
-    # Store nickname in session FOR THE HTTP redirect only. SocketIO will use its own mapping.
+    # Allow login even if nickname is taken, just ensure it's not empty
+    if not nickname:
+         logging.warning("Enter chat attempt with no nickname.")
+         # TODO: Add user feedback here (e.g., flash message)
+         return redirect(url_for('index'))
+
+    # Store in session just to pass it to the chat template on redirect
     session['nickname'] = nickname
-    logging.info(f"Nickname '{nickname}' set in session, redirecting to chat.")
+    logging.info(f"Nickname '{nickname}' submitted, redirecting to chat.")
     return redirect(url_for('chat'))
 
 @app.route('/chat', methods=['GET'])
 def chat():
+    """Serves the main chat page, passing nickname for initial JS use."""
     nickname = session.get('nickname')
     if not nickname:
+        # If session lost somehow before reaching chat, redirect back
         return redirect(url_for('index'))
-    # Pass nickname to template, JS will use it for initial join event
+    # Pass nickname to template; JS will use this to emit the 'join' event
     return render_template('chat.html', nickname=nickname)
 
 # --- SocketIO Event Handlers ---
 @socketio.on('connect')
 def handle_connect():
-    # Don't rely on session here, wait for 'join' event from client
-    logging.info(f'Client connected: {request.sid}')
-    # Send message history to the connecting client ONLY
+    """Client connected, wait for 'join' event with nickname."""
+    logging.info(f'Client connected: {request.sid}. Waiting for join event.')
+    # Send message history immediately
     history = get_message_history()
-    history.reverse()
+    history.reverse() # Show oldest first
     for msg_data in history:
         parts = msg_data.split(":", 1)
         hist_nick = parts[0]
         hist_msg = parts[1].strip() if len(parts) > 1 else ""
         emit('chat_message', {'nickname': hist_nick, 'msg': hist_msg}, room=request.sid)
 
-
 @socketio.on('disconnect')
 def handle_disconnect():
-    # Use SID map to find nickname reliably
-    nickname = remove_online_user(request.sid)
+    """Client disconnected, remove SID mapping and notify others."""
+    nickname = remove_online_user(request.sid) # Remove user by SID from map
     if nickname:
         leave_room(GENERAL_ROOM)
         logging.info(f'Client disconnected: {nickname} ({request.sid})')
-        emit('status', {'msg': f'{nickname} has left the chat.'}, to=GENERAL_ROOM) # Broadcast leave message
-        emit('user_list_update', get_online_users(), broadcast=True) # Broadcast updated user list
+        # Notify room that user left
+        emit('status', {'msg': f'{nickname} has left the chat.'}, to=GENERAL_ROOM)
+        # Broadcast updated user list
+        emit('user_list_update', get_online_users(), broadcast=True)
     else:
-        logging.info(f'Client disconnected without known nickname: {request.sid}')
+        logging.info(f'Unmapped client disconnected: {request.sid}')
 
-@socketio.on('join') # New event handler for client joining with nickname
+@socketio.on('join') # Client explicitly joins with nickname after connecting
 def handle_join(data):
+    """Handles client sending its nickname after connection."""
     nickname = data.get('nickname')
     sid = request.sid
     if not nickname:
         logging.warning(f"Join attempt with no nickname from {sid}")
         return
 
-    # Check if nickname is already online (maybe redundant if checked in POST but good safety)
-    if redis_client and redis_client.sismember(ONLINE_USERS_KEY, nickname):
-        logging.warning(f"Nickname '{nickname}' tried to join but already exists.")
-        # Optionally emit an error back to the client
-        emit('error', {'msg': 'Nickname already taken.'}, room=sid)
-        return
-
     join_room(GENERAL_ROOM)
-    add_online_user(sid, nickname)
-    logging.info(f"Client joined: {nickname} ({sid})")
+    add_online_user(sid, nickname) # Add SID -> nickname mapping
+    logging.info(f"Client joined room: {nickname} ({sid})")
+    # Notify room that user joined
     emit('status', {'msg': f'{nickname} has entered the chat.'}, to=GENERAL_ROOM)
+     # Broadcast updated user list
     emit('user_list_update', get_online_users(), broadcast=True)
-
 
 @socketio.on('new_message')
 def handle_new_message(data):
-    # Get nickname reliably from SID map, fallback to data from client as secondary
+    """Handles receiving a new message, uses SID map to find sender."""
     sid = request.sid
-    nickname = get_nickname_from_sid(sid) or data.get('nickname', 'Anonymous') # Prioritize server-side map
+    # Get nickname reliably from SID map
+    nickname = get_nickname_from_sid(sid)
     msg = data.get('msg', '')
 
-    if msg and nickname != 'Anonymous':
+    if msg and nickname: # Only process if message exists and sender is known
         logging.info(f'Message from {nickname} ({sid}): {msg}')
         add_message(nickname, msg)
+        # Broadcast message to everyone in the room
         emit('chat_message', {'nickname': nickname, 'msg': msg}, to=GENERAL_ROOM)
     elif not msg:
-         logging.warning(f"Empty message received from {nickname} ({sid})")
-    else: # Nickname was Anonymous
-         logging.warning(f"Message received from unknown user ({sid}): {msg}")
-
+         logging.warning(f"Empty message received from {nickname or 'unknown user'} ({sid})")
+    else: # Nickname lookup failed
+         logging.warning(f"Message received from SID {sid} with no mapped nickname: {msg}")
 
 # --- Main Execution ---
 if __name__ == '__main__':
     logging.info("Starting Flask-SocketIO server with eventlet...")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False) # Turn debug off for production-like run
+    # Turn off Flask debug mode when using eventlet/gunicorn in production/docker
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)

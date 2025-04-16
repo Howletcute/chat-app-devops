@@ -1,36 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Chat</title>
+    <style>
+        body { margin: 0; padding-bottom: 3rem; font-family: sans-serif; display: flex; height: 100vh; box-sizing: border-box; }
+        #sidebar { width: 150px; border-right: 1px solid #ccc; padding: 10px; overflow-y: auto; background-color: #f7f7f7; box-sizing: border-box; height: 100%; }
+        #sidebar h3 { margin-top: 0; font-size: 1em; }
+        #sidebar ul { list-style-type: none; padding: 0; margin: 0; }
+        #sidebar ul li { padding: 2px 0; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #chat-area { flex-grow: 1; display: flex; flex-direction: column; height: 100%; }
+        #messages { list-style-type: none; margin: 0; padding: 1rem; overflow-y: auto; flex-grow: 1; border-bottom: 1px solid #ccc; }
+        #messages > li { padding: 0.5rem 1rem; word-wrap: break-word; }
+        #messages > li:nth-child(odd) { background: #efefef; }
+        #form { background: rgba(0, 0, 0, 0.1); padding: 0.5rem; display: flex; height: 3.5rem; box-sizing: border-box; }
+        #input { border: 1px solid #ccc; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin-right: 0.5rem; }
+        #input:focus { outline: none; border-color: #999; }
+        #form > button { background: #333; border: none; padding: 0 1rem; border-radius: 3px; outline: none; color: #fff; cursor: pointer; }
+        #form > button:hover { background: #444; }
+        /* Style for status messages */
+        .status-message { font-style: italic; color: #666; text-align: center; padding: 0.25rem 1rem; font-size: 0.9em; }
+    </style>
+</head>
 <body>
-    <script>
-        // Get nickname passed from server/sessionStorage
-        const nickname = "{{ nickname }}"; // Use nickname passed from Flask template
-        sessionStorage.setItem('nickname', nickname); // Store it for potential later use
+    <div id="sidebar">
+        <h3>Online</h3>
+        <ul id="user-list">
+            </ul>
+    </div>
 
+    <div id="chat-area">
+        <ul id="messages">
+            </ul>
+        <form id="form" action="">
+            <input id="input" autocomplete="off" placeholder="Type message..." />
+            <button>Send</button>
+        </form>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <script>
+        // Get nickname passed from Flask template via server-side rendering
+        const nickname = "{{ nickname }}";
+        // Store in sessionStorage in case needed, though we primarily use the variable
+        sessionStorage.setItem('nickname', nickname);
+
+        // Connect to the Socket.IO server (assumes same origin)
         const socket = io(location.origin);
-        // ... (get elements: messages, form, input, userList) ...
+
+        // Get references to HTML elements
+        const messages = document.getElementById('messages');
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const userList = document.getElementById('user-list');
 
         // --- Emit Events ---
-        // **MODIFIED:** Send a 'join' event AFTER connecting
+
+        // Send a 'join' event AFTER successfully connecting
         socket.on('connect', () => {
-            console.log('Socket connected, emitting join event.');
-            socket.emit('join', { nickname: nickname }); // Send nickname in join event
+            console.log('Socket connected, emitting join event for:', nickname);
+            if (nickname) {
+                socket.emit('join', { nickname: nickname });
+            } else {
+                console.error('Nickname is missing, cannot join chat.');
+                // Optionally redirect back to login or show error
+                // window.location.href = "/"; // Example redirect
+            }
         });
 
-        // Send message when form is submitted (Include nickname here too)
+        // Send message when form is submitted
         form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (input.value) {
+            e.preventDefault(); // Prevent page reload
+            if (input.value && nickname) { // Ensure message and nickname exist
                 // Send nickname with message data
                 socket.emit('new_message', { msg: input.value, nickname: nickname });
-                input.value = '';
+                input.value = ''; // Clear input field
             }
         });
 
         // --- Listen for Events ---
-        // ... (chat_message, status, user_list_update listeners remain the same) ...
 
-         // Optional: Handle errors from server
+        // Append a regular chat message to the list
+        socket.on('chat_message', (data) => {
+            const item = document.createElement('li');
+            // Basic sanitization (replace < and >) to prevent simple HTML injection
+            const safeNickname = data.nickname.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const safeMsg = data.msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            item.innerHTML = `<strong>${safeNickname}:</strong> ${safeMsg}`; // Use innerHTML to allow <strong>
+            messages.appendChild(item);
+            messages.scrollTop = messages.scrollHeight; // Scroll to bottom
+        });
+
+        // Append a status message (like join/leave)
+        socket.on('status', (data) => {
+            const item = document.createElement('li');
+            item.className = 'status-message'; // Apply specific style
+            const safeMsg = data.msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            item.textContent = safeMsg;
+            messages.appendChild(item);
+            messages.scrollTop = messages.scrollHeight; // Scroll to bottom
+        });
+
+         // Update the online user list
+         socket.on('user_list_update', (users) => {
+            userList.innerHTML = ''; // Clear current list
+            if (users && users.length > 0) {
+                users.forEach(user => {
+                    const item = document.createElement('li');
+                    const safeUser = user.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    item.textContent = safeUser;
+                    // Optionally highlight own nickname
+                    if (safeUser === nickname) {
+                        item.style.fontWeight = 'bold';
+                    }
+                    userList.appendChild(item);
+                });
+            } else {
+                const item = document.createElement('li');
+                item.textContent = 'No users online';
+                item.style.fontStyle = 'italic';
+                userList.appendChild(item);
+            }
+        });
+
+         // Optional: Handle errors from server (e.g., nickname taken if we re-add that check)
         socket.on('error', (data) => {
             alert(`Server Error: ${data.msg}`);
-            // Maybe redirect or disable input if nickname is taken
+        });
+
+        // Optional: Log disconnection for debugging
+        socket.on('disconnect', (reason) => {
+            console.log('Socket disconnected:', reason);
+            const item = document.createElement('li');
+            item.className = 'status-message';
+            item.textContent = 'You have been disconnected. Please refresh to rejoin.';
+            messages.appendChild(item);
+            messages.scrollTop = messages.scrollHeight;
         });
 
     </script>
