@@ -1,63 +1,83 @@
 # terraform/gke.tf
 
-# Data source for default network (used by cluster)
+# Data source to get information about the default VPC network
 data "google_compute_network" "default" {
   name = "default"
+  # project = var.gcp_project_id # Uncomment if your network is not in the provider's project
 }
 
-# GKE Cluster Resource (Standard, Zonal)
+# --- GKE Cluster (Standard ZONAL) ---
 resource "google_container_cluster" "primary" {
+  # Required name for the cluster, uses variable defined in variables.tf
   name     = var.gke_cluster_name
-  location = var.gcp_zone # Create a Zonal cluster
+  # Location sets this as a Zonal cluster (control plane in this zone)
+  location = var.gcp_zone
 
-  # We define our own node pool, so remove the default one GKE creates
+  # We define our own node pool immediately, so remove the default one
   remove_default_node_pool = true
-  initial_node_count       = 1 # Required by TF when removing default pool
+  initial_node_count       = 1 # Required by TF when removing the default pool
 
+  # Networking configuration using the default VPC
   network    = data.google_compute_network.default.id
-  subnetwork = null # Use default subnet in the zone
+  subnetwork = null # Use the default subnetwork in the specified zone
 
-  # Explicitly disable cluster autoscaling
-  cluster_autoscaling {
-    enabled = false
-    # No resource_limits needed when disabled
+  # Explicitly define IP allocation policy
+  ip_allocation_policy {
+    # Request a specific private range for Kubernetes Services (ClusterIPs)
+    # This range should not overlap with your VPC subnets.
+    # "10.100.0.0/20" is just an example, GKE might adjust slightly if needed.
+    services_ipv4_cidr_block = "10.100.0.0/20"
+
+    # We can let GKE choose the Pod IP range automatically by omitting
+    # cluster_ipv4_cidr_block = "..."
   }
 
-  # Standard logging/monitoring services
+  # Enable standard logging and monitoring services
   logging_service    = "logging.googleapis.com/kubernetes"
   monitoring_service = "monitoring.googleapis.com/kubernetes"
 
-  # Allow deletion via Terraform
+  # Disable deletion protection for easy cleanup during testing
   deletion_protection = false
+
+  # Explicitly disable cluster-level autoscaling features like Node Autoprovisioning
+  # The 'cluster_autoscaling' block itself is removed as it caused API errors when 'enabled = false'
+  # Node pool specific scaling is handled in the node pool resource below.
 }
 
-# GKE Node Pool Resource (Single e2-medium Node)
+# --- GKE Node Pool (Single e2-medium, Autoscaling Enabled) ---
 resource "google_container_node_pool" "primary_nodes" {
-  name       = "${var.gke_cluster_name}-node-pool" # Simplified pool name
+  # Name for the node pool
+  name       = "${var.gke_cluster_name}-std-pool"
+  # Link to the cluster defined above
   cluster    = google_container_cluster.primary.id
-  location   = var.gcp_zone # Place nodes in the same zone as the control plane
-  node_count = 1            # Start with exactly one node
+  # Ensure nodes are created in the same zone as the cluster control plane
+  location   = var.gcp_zone
 
-  # Disable node pool autoscaling (enforce single node)
+  # Configure node pool autoscaling
   autoscaling {
-    min_node_count = 1
-    max_node_count = 1
+    min_node_count = 1 # Minimum number of nodes
+    max_node_count = 3 # Maximum number of nodes GKE can scale up to
   }
 
-  # Configure node management options
+  # Node pool management settings
   management {
-    auto_repair  = true
-    auto_upgrade = true
+    auto_repair  = true # Enable automatic node repairs
+    auto_upgrade = true # Enable automatic node upgrades (recommended)
   }
 
-  # Define the node configuration
+  # Configuration for the nodes in this pool
   node_config {
-    machine_type = var.gke_node_machine_type # e.g., "e2-medium"
-    disk_size_gb = var.gke_node_disk_size_gb # e.g., 30
-    disk_type    = var.gke_node_disk_type    # e.g., "pd-standard"
-    preemptible  = false                     # Must be non-preemptible
+    # Machine type - Using e2-medium (covered by free trial credit)
+    machine_type = var.gke_node_machine_type # Defaults to "e2-medium" in variables.tf
 
-    # Required OAuth scopes for GKE nodes
+    # Disk settings - Keeping size within general free tier ideas
+    disk_size_gb = var.gke_node_disk_size_gb # Defaults to 30
+    disk_type    = var.gke_node_disk_type    # Defaults to "pd-standard"
+
+    # Must be false for standard node pools generally
+    preemptible  = false
+
+    # Standard OAuth scopes required for nodes to interact with GCP APIs
     oauth_scopes = [
       "https://www.googleapis.com/auth/compute",
       "https://www.googleapis.com/auth/devstorage.read_only",
@@ -66,6 +86,6 @@ resource "google_container_node_pool" "primary_nodes" {
     ]
   }
 
-  # Ensure this node pool is created only after the cluster exists
+  # Ensure this depends on the cluster being created first (usually implicit)
   depends_on = [google_container_cluster.primary]
 }
