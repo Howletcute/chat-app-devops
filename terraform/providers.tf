@@ -4,12 +4,12 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0" # Use a recent version of the GCP provider
+      version = "~> 5.0" # Use a recent stable version
     }
   }
 }
 
-# Configure the Google Cloud provider with details from variables
+# Configure the standard Google provider
 provider "google" {
   project = var.gcp_project_id
   region  = var.gcp_region
