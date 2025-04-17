@@ -65,11 +65,7 @@ jobs:
       - id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
-          # Use workload_identity_provider OR credentials_json
-          # credentials_json: '${{ secrets.GCP_SA_KEY }}' # Use the SA Key stored in secrets
-          # If using WIF (more secure, requires setup in GCP):
-          workload_identity_provider: 'projects/<YOUR_GCP_PROJECT_NUMBER>/locations/global/workloadIdentityPools/<YOUR_POOL_NAME>/providers/<YOUR_PROVIDER_NAME>'
-          service_account: 'github-actions-gke-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com' # Use your SA email
+            credentials_json: '${{ secrets.GCP_SA_KEY }}' # USE THIS LINE
 
       # Set up gcloud CLI (needed for get-credentials)
       - name: Set up Cloud SDK
