@@ -1,0 +1,28 @@
+# k8s/redis-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine # Use the same image as compose
+        ports:
+        - containerPort: 6379
+        # Add basic resource requests - IMPORTANT for K8s scheduling
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m" # 50 millicpu (0.05 CPU)
+          limits:
+            memory: "128Mi"
+            cpu: "100m"

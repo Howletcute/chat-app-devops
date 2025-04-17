@@ -1,0 +1,29 @@
+# k8s/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chat-ingress
+  annotations:
+    # Tell cert-manager which ClusterIssuer to use
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Specify the ingress controller class (nginx)
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  tls:
+  - hosts:
+    # The domain we want TLS for
+    - howlet-chat.duckdns.org
+    # cert-manager will store the created certificate in this secret
+    secretName: howlet-chat-tls-secret
+  rules:
+  - host: howlet-chat.duckdns.org # Listen for traffic for this host
+    http:
+      paths:
+      - path: / # Match all paths
+        pathType: Prefix
+        backend:
+          service:
+            # Route traffic to the web app's service on port 80
+            name: web-service
+            port:
+              number: 80
