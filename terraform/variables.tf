@@ -1,37 +1,51 @@
-# variables.tf
+# terraform/variables.tf
 
 variable "gcp_project_id" {
-  description = "todo-devops-456703"
+  description = "Your GCP Project ID (howlet-chat-app)"
   type        = string
-  # Make sure this project exists in your GCP account
+  # No default - value should come from terraform.tfvars
 }
 
 variable "gcp_region" {
-  description = "GCP region to deploy resources in (e.g., us-central1)"
+  description = "GCP region for resources (e.g., us-central1)"
   type        = string
-  default     = "us-central1" # Choose an Always Free eligible region
+  default     = "us-central1" # Free tier eligible region
 }
 
 variable "gcp_zone" {
   description = "GCP zone within the region (e.g., us-central1-a)"
   type        = string
-  default     = "us-central1-a" # Choose a zone within your selected region
+  default     = "us-central1-a" # Zone within the region
 }
 
-variable "instance_name" {
-  description = "Name for the Compute Engine instance"
-  type        = string
-  default     = "todo-app-vm"
-}
-
-variable "machine_type" {
-  description = "Machine type for the VM"
-  type        = string
-  default     = "e2-micro" # Always Free eligible machine type
-}
-
+# Note: ssh_source_ip is still needed if you want firewall rules created by TF,
+# but we removed the VM firewall rules. Keep it if you might add GKE firewall rules later via TF.
 variable "ssh_source_ip" {
-  description = "Your public IP address to allow SSH access from (use CIDR notation, e.g., 'YOUR_IP/32'). Find yours at https://whatismyipaddress.com/"
+  description = "Your public IP address for potential SSH access rules (use CIDR notation, e.g., 'YOUR_IP/32')"
   type        = string
-  # No default value - Terraform will require this variable to be set
+  # No default - value should come from terraform.tfvars
+}
+
+variable "gke_cluster_name" {
+  description = "Name for the GKE cluster"
+  type        = string
+  default     = "chat-app-std-cluster" # Renamed slightly for clarity
+}
+
+variable "gke_node_machine_type" {
+  description = "Machine type for GKE Standard node pool"
+  type        = string
+  default     = "e2-medium" # Use free-trial covered type
+}
+
+variable "gke_node_disk_size_gb" {
+  description = "Disk size in GB for GKE nodes"
+  type        = number
+  default     = 30
+}
+
+variable "gke_node_disk_type" {
+  description = "Disk type for GKE nodes"
+  type        = string
+  default     = "pd-standard"
 }

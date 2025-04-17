@@ -1,9 +1,8 @@
 # terraform/backend.tf
 
-# Configure the GCS backend for remote state storage
 terraform {
   backend "gcs" {
-    bucket = "howlets-todo-devops" # Replace with the exact name of the bucket you created
-    prefix = "terraform/state/todo-app" # Path within the bucket to store the state file
+    bucket = "howlet-chat-app-tfstate-gke-std" # <-- Put the EXACT name of the bucket you just created
+    prefix = "terraform/state/gke-standard"    # State file path within the bucket
   }
 }

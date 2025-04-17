@@ -1,0 +1,19 @@
+# k8s/cluster-issuer.yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # Email address used for ACME registration & expiry notifications
+    # IMPORTANT: Replace with your real email address!
+    email: "howletcute@gmail.com"
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      # Secret resource that will store the account's private key.
+      name: letsencrypt-prod-account-key
+    # Add a single challenge solver, HTTP01 using nginx
+    solvers:
+      - http01:
+          ingress:
+            class: nginx # Use nginx ingress controller
