@@ -1,28 +1,35 @@
-# Real-Time Chat Application (v1.0)
+# Real-Time Chat Application (v1.1.0 - GKE Deployment)
 
 ## Description
 
-This project implements a simple, anonymous real-time chat application. Users can choose a nickname, enter a common chat room, send messages, and see who else is online.
+This project implements a simple, anonymous real-time chat application using Flask-SocketIO and Redis. Users can choose a nickname, enter a common chat room, send messages, and see who else is online.
 
-It serves as a demonstration of deploying a containerized web application using modern DevOps practices and tools. Version 1.0 deploys the application to a single Google Cloud Platform (GCP) Compute Engine VM using Docker Compose, provisioned via Terraform and Ansible, with CI/CD handled by GitHub Actions.
+Version 1.1.0 represents the migration of the deployment from a single VM to **Google Kubernetes Engine (GKE)**. It runs on a **GKE Standard Zonal cluster** (starting with an `e2-medium` node pool with autoscaling) provisioned via Terraform. Ingress is handled by **Nginx Ingress Controller**, and TLS/HTTPS is automated using **cert-manager** with Let's Encrypt certificates. Deployment is automated via **GitHub Actions**.
 
-## Features (v1.0)
+**Note on Cost:** This configuration requires a GCP account with the **$300 Free Trial credit** activated to run without incurring costs during the trial period, as the `e2-medium` node(s) and GCP Load Balancer provisioned by Nginx Ingress exceed the limits of the basic Always Free tier.
 
-* Anonymous login using a chosen nickname.
+## Features (v1.1.0)
+
+* Anonymous login using a chosen nickname (duplicates allowed).
 * Single, common chat room for all connected users.
 * Real-time message broadcasting using WebSockets (Flask-SocketIO).
-* Display list of currently online users.
+* Display list of currently online users (updates on join/leave).
 * Basic message history loaded on joining.
+* Deployment automated via CI/CD (GitHub Actions).
+* Served over HTTPS with a valid certificate.
 
 ## Technology Stack
 
-* **Backend:** Python, Flask, Flask-SocketIO, Eventlet
-* **Database:** Redis (for message history and online user tracking)
-* **Containerization:** Docker, Docker Compose
+* **Backend:** Python, Flask, Flask-SocketIO, Eventlet, Gunicorn
+* **Database/Cache:** Redis
+* **Containerization:** Docker
+* **Orchestration:** Kubernetes (GKE Standard)
 * **Infrastructure as Code:** Terraform
-* **Configuration Management:** Ansible (for initial server setup)
 * **Cloud Provider:** Google Cloud Platform (GCP)
 * **CI/CD:** GitHub Actions
+* **Ingress:** Nginx Ingress Controller
+* **TLS Certificates:** Cert-Manager + Let's Encrypt
+* **Package Management:** Helm (for Nginx Ingress, Cert-Manager)
 * **Version Control:** Git
 
 ## Prerequisites
@@ -30,131 +37,150 @@ It serves as a demonstration of deploying a containerized web application using 
 Before you begin, ensure you have the following installed and configured:
 
 1.  **Git:** For cloning the repository.
-2.  **Docker & Docker Compose:** For running the application locally and building images. ([Install Docker](https://docs.docker.com/engine/install/))
+2.  **Docker & Docker Compose:** For running the application locally. ([Install Docker](https://docs.docker.com/engine/install/))
 3.  **Terraform CLI:** For provisioning cloud infrastructure. ([Install Terraform](https://developer.hashicorp.com/terraform/downloads))
-4.  **Ansible:** For configuring the server (can be installed via pip: `pip install ansible`).
-5.  **Google Cloud SDK (`gcloud`):** For interacting with GCP, including authentication. ([Install gcloud](https://cloud.google.com/sdk/docs/install))
-6.  **Google Cloud Platform (GCP) Account:** With an active project and **Billing Enabled**. Even free tier usage requires billing to be enabled.
-7.  **Docker Hub Account:** To store and retrieve the application's Docker image. ([Create Account](https://hub.docker.com/))
-8.  **GitHub Account:** To host the repository and use GitHub Actions.
+4.  **Google Cloud SDK (`gcloud`):** For interacting with GCP and GKE. Needs `gke-gcloud-auth-plugin`. ([Install gcloud](https://cloud.google.com/sdk/docs/install), then run `gcloud components install gke-gcloud-auth-plugin`)
+5.  **`kubectl` CLI:** For interacting with the Kubernetes cluster. ([Install kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/))
+6.  **Helm CLI:** For installing cluster add-ons (Nginx, Cert-Manager). ([Install Helm](https://helm.sh/docs/intro/install/))
+7.  **Google Cloud Platform (GCP) Account:** With an active project, **Billing Enabled**, and ideally the **$300 Free Trial activated** to cover resource costs.
+8.  **Docker Hub Account:** To store and retrieve the application's Docker image.
+9.  **GitHub Account:** To host the repository and use GitHub Actions.
+10. **DuckDNS Account & Subdomain:** A free subdomain (e.g., `your-name.duckdns.org`) registered at [DuckDNS](https://www.duckdns.org/).
 
 ## Running Locally
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/Howletcute/chat-app-devops.git
+    # Replace with the actual HTTPS or SSH URL of your repository
+    git clone [https://github.com/Howletcute/chat-app-devops.git](https://github.com/Howletcute/chat-app-devops.git)
     cd chat-app-devops
     ```
-2.  **Create Environment File:** Create a `.env` file in the project root for local development secrets (this file is gitignored):
+2.  **Create Environment File:** Create a `.env` file in the project root:
     ```dotenv
     # .env
     SECRET_KEY=a_local_secret_dev_key_!@#
     ```
-    *(Note: The `docker-compose.yml` file is configured to use a Redis service named `db`, so specific REDIS variables aren't usually needed here when using compose)*
-
 3.  **Build and Run with Docker Compose:**
     ```bash
     docker compose up --build -d
     ```
 4.  **Access:** Open your web browser to `http://localhost:5001`.
 
-## Deploying to GCP (Free Tier Focus)
+## Deploying to GCP (GKE Standard with Free Trial)
 
-This outlines the process to deploy the application to a single GCP VM, aiming to stay within the Always Free tier limits.
-
-## Deploying to GCP (Free Tier Focus)
-
-This outlines the process to deploy the application from this repository to a single GCP VM, aiming to stay within the Always Free tier limits. It assumes you have contributor/owner access to this repository or a fork of it to configure secrets and Actions.
+This deploys the application to a GKE Standard Zonal cluster using resources covered by the GCP Free Trial credit.
 
 **1. Prerequisites Check:**
 
-* Ensure you have met all items listed in the [Prerequisites](#prerequisites) section above.
+* Ensure all items in the [Prerequisites](#prerequisites) section are met, especially the GCP account with Free Trial active and Billing enabled.
 
 **2. GCP Setup:**
 
-* Ensure you have a GCP Project with **Billing Enabled**.
-* Create a unique Google Cloud Storage (GCS) bucket to store Terraform's remote state. **Object Versioning must be enabled.** Replace placeholders below:
+* Create a unique Google Cloud Storage (GCS) bucket for Terraform state (ensure **Object Versioning** is enabled):
     ```bash
-    gcloud storage buckets create gs://<YOUR-UNIQUE-BUCKET-NAME> --project=<YOUR-PROJECT-ID> --location=<GCP_REGION e.g., us-central1> --uniform-bucket-level-access --versioning
+    # Replace placeholders!
+    gcloud storage buckets create gs://<YOUR-UNIQUE-BUCKET-NAME-gke> --project=<YOUR-GCP-PROJECT-ID> --location=<GCP_REGION e.g., us-central1> --uniform-bucket-level-access --versioning
     ```
 
-**3. Terraform Setup:**
+**3. Terraform Infrastructure Setup:**
 
-* **Clone Repository:** If you haven't already cloned this project repository:
-    ```bash
-    # Replace with the actual HTTPS or SSH URL of your repository
-    git clone [https://github.com/howletcute/chat-app-devops.git](https://github.com/howletcute/chat-app-devops.git)
-    cd chat-app-devops
-    ```
-* **Configure Backend:** Edit `terraform/backend.tf` and replace `"YOUR-UNIQUE-BUCKET-NAME"` with the name of the GCS bucket you created.
-* **Configure Variables:** Create a `terraform/terraform.tfvars` file (ensure this file is in your `.gitignore`!) with the following content, replacing placeholders:
+* **Clone Repository:** If not already done.
+* **Configure Backend:** Edit `terraform/backend.tf` and set the `bucket` name to the GCS bucket you created.
+* **Configure Variables:** Create `terraform/terraform.tfvars` with your GCP Project ID and your current public IP (for potential firewall rules, though less critical now):
     ```hcl
     # terraform/terraform.tfvars
-    gcp_project_id = "<YOUR-PROJECT-ID>"
-    ssh_source_ip  = "<YOUR_PUBLIC_IP>/32" # e.g., "8.8.8.8/32"
+    gcp_project_id = "<YOUR-GCP-PROJECT-ID>" # e.g., howlet-chat-app
+    ssh_source_ip  = "<YOUR_PUBLIC_IP>/32"
     ```
-* **Initialize & Apply:** Navigate to the `terraform` directory and run:
+    *(Note: Set the `gcp_region` and `gcp_zone` defaults in `variables.tf` if different from `us-central1`/`us-central1-a`. Set `gke_node_machine_type` to `e2-medium`)*
+* **Initialize & Apply:** Navigate to the `terraform` directory:
     ```bash
     cd terraform
-    terraform init # Will configure the GCS backend
-    terraform plan # Review the planned infrastructure
-    terraform apply # Type 'yes' to create the resources
+    terraform init -upgrade
+    terraform plan # Review plan: should create GKE Standard Cluster + Node Pool
+    terraform apply # Confirm with 'yes'. Takes several minutes.
     ```
-    Note the `instance_public_ip` output value.
+* **Configure `kubectl`:** Copy the `kubeconfig_command` value from the `terraform apply` output and run it in your terminal. Verify with `kubectl get nodes`.
 
-**4. GitHub Actions Setup (Secrets & Keys):**
+**4. Install Cluster Add-ons (Manual Helm Steps for v1.1.0):**
 
-* This needs to be done on the GitHub repository where the Actions workflow will run (either the main project repo if you have access, or your fork).
-* **Generate SSH Key:** Create a new SSH key pair (`ssh-keygen ...`).
-* **Generate Docker Hub Token:** Create an Access Token on Docker Hub.
-* **Add GitHub Secrets:** In the repository settings (Settings > Secrets and variables > Actions), add the required secrets (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `SSH_PRIVATE_KEY`, `SSH_HOST` [use VM IP from terraform output], `SSH_USER` [your username on the VM]).
-* **Add Public Key to VM:** Add the SSH public key to the VM's `~/.ssh/authorized_keys` file (connect via `gcloud compute ssh ...`).
+*These steps install prerequisites required *before* the application deployment pipeline can succeed.*
+    * **Install Nginx Ingress:**
+        ```bash
+        helm repo add ingress-nginx [https://kubernetes.github.io/ingress-nginx](https://kubernetes.github.io/ingress-nginx)
+        helm repo update
+        helm install ingress-nginx ingress-nginx/ingress-nginx --namespace default --create-namespace
+        ```
+    * **Install Cert-Manager:** (Using the specific fix for GKE)
+        ```bash
+        helm repo add jetstack [https://charts.jetstack.io](https://charts.jetstack.io)
+        helm repo update
+        helm install cert-manager jetstack/cert-manager \
+          --namespace cert-manager \
+          --create-namespace \
+          --version v1.14.5 \
+          --set installCRDs=true \
+          --set global.leaderElection.namespace=cert-manager
+        ```
+    * **Get Nginx External IP:** Wait a few minutes, then get the IP:
+        ```bash
+        kubectl get service ingress-nginx-controller -n default
+        ```
+    * **Update DNS:** Go to DuckDNS and update the IP address for your subdomain (`howlet-chat.duckdns.org`) to point to the External IP obtained above.
 
-**5. Deployment Trigger:**
+**5. GitHub Actions Setup (Secrets):**
 
-* Pushing changes to the `main` branch of the repository configured with secrets will trigger the GitHub Actions workflow in `.github/workflows/deploy.yml`.
-* The pipeline builds and pushes the `howletcute/chat-app:latest` image and deploys it to the VM.
+* This needs to be done on the GitHub repository where the Actions workflow will run.
+* **Create GCP Service Account & Key:** Create a Service Account (e.g., `github-actions-gke-deployer`), grant it `Kubernetes Engine Developer` and `Service Account User` roles, and create/download a JSON key.
+* **Add GitHub Secrets:** In repository Settings > Secrets and variables > Actions, add:
+    * `DOCKERHUB_USERNAME`: Your Docker Hub username.
+    * `DOCKERHUB_TOKEN`: Your Docker Hub access token.
+    * `GCP_SA_KEY`: The entire JSON content of the GCP Service Account key file.
+    * `GCP_PROJECT_ID`: Your GCP Project ID (e.g., `howlet-chat-app`).
+    * `GCP_ZONE`: The GCP zone used for the cluster (e.g., `us-central1-a`).
+    * `GKE_CLUSTER_NAME`: The name of your GKE cluster (e.g., `chat-app-std-cluster`).
 
-**6. Accessing the Application:**
+**6. Deployment Trigger:**
 
-* Once the pipeline completes successfully after a push to `main`, open your browser and navigate to `http://<VM_PUBLIC_IP>:5001`.
+* Pushing changes to the `main` branch triggers the GitHub Actions workflow defined in `.github/workflows/deploy.yml`.
+* The pipeline builds the `howletcute/chat-app:latest` image, pushes it, authenticates to GKE, and deploys the application using `kubectl apply -f k8s/`.
 
+**7. Accessing the Application:**
 
-## Project Structure
+* After the pipeline runs successfully, allow a minute or two for the Let's Encrypt certificate to be issued by cert-manager.
+* Access the application via HTTPS: `https://howlet-chat.duckdns.org` (replace with your actual domain).
+
+## Project Structure (v1.1.0)
 
 ```text
 .
-├── .github/workflows/      # GitHub Actions CI/CD pipeline
+├── .github/workflows/      # GitHub Actions CI/CD pipeline for GKE
 │   └── deploy.yml
-├── ansible/                # Ansible configuration
-│   ├── configure-vm.yml    # Playbook to setup Docker on VM (v1.0 state)
-│   ├── deploy-app.yml      # Playbook for app deployment (used by CI/CD logic)
-│   └── inventory.ini       # Ansible inventory file
+├── ansible/                # Ansible (Not used for GKE deployment in v1.1)
+│   ├── configure-vm.yml
+│   ├── deploy-app.yml
+│   └── inventory.ini
+├── k8s/                    # Kubernetes Manifests
+│   ├── cluster-issuer.yaml
+│   ├── ingress.yaml
+│   ├── redis-deployment.yaml
+│   ├── redis-service.yaml
+│   ├── web-deployment.yaml
+│   └── web-service.yaml
 ├── templates/              # Flask HTML templates
 │   ├── chat.html
 │   └── index.html
-├── terraform/              # Terraform infrastructure code
-│   ├── backend.tf          # GCS backend configuration
-│   ├── gke.tf              # GKE cluster definition (Added in feature branch)
-│   ├── main.tf             # Core resources (VM, Firewall in v1.0)
-│   ├── outputs.tf          # Terraform outputs
-│   ├── providers.tf        # Terraform provider configuration
-│   └── variables.tf        # Terraform input variables
+├── terraform/              # Terraform infrastructure code (GKE Cluster/Nodes)
+│   ├── backend.tf
+│   ├── gke.tf              # Contains GKE cluster and node pool definitions
+│   ├── main.tf             # Currently empty or holds non-GKE resources
+│   ├── outputs.tf
+│   ├── providers.tf
+│   └── variables.tf
 ├── .env                    # Local environment variables (Gitignored)
 ├── .gitignore
-├── app.py                  # Main Flask application code
-├── Dockerfile              # Docker build instructions
-├── docker-compose.yml      # Docker Compose configuration
+├── app.py                  # Flask-SocketIO chat application code
+├── Dockerfile              # Docker build instructions for chat app
+├── docker-compose.yml      # Docker Compose for local development
 ├── README.md               # This file
 └── requirements.txt        # Python dependencies
-
-## Future Improvements (Post v1.0)
-
-* Migrate deployment to Google Kubernetes Engine (GKE).
-* Implement user authentication (login/passwords).
-* Add proper error handling and user feedback (e.g., nickname taken).
-* Set up monitoring and logging.
-* Use a managed database service (Cloud SQL) instead of containerized Redis/Postgres.
-* Improve CI/CD pipeline (testing, staging environments, security scanning).
-* Manage secrets more securely (e.g., Vault, GCP Secret Manager).
-* Refactor Ansible playbook to reliably use `signed-by=` GPG key method if possible.
