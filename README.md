@@ -184,3 +184,13 @@ This deploys the application to a GKE Standard Zonal cluster using resources cov
 ├── docker-compose.yml      # Docker Compose for local development
 ├── README.md               # This file
 └── requirements.txt        # Python dependencies
+
+
+Future Improvements
+Automate Helm installs via Terraform or GitOps.
+Implement user authentication.
+Add more chat features (private messages, rooms).
+Set up monitoring and logging (Prometheus/Grafana/Cloud Monitoring).
+Use managed Redis (Memorystore) instead of container.
+Add automated tests to CI/CD pipeline.
+Implement more robust secret management (Vault, GCP Secret Manager).
