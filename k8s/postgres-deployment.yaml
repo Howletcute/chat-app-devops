@@ -1,0 +1,54 @@
+# k8s/postgres-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment # Using Deployment for simplicity (1 replica)
+metadata:
+  name: postgres-deployment
+  labels:
+    app: postgres # Label for service selector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:14-alpine # Use official Postgres image
+        ports:
+        - containerPort: 5432
+        env:
+          # Set PostgreSQL user, password, and database name
+          # Password and User values come from the postgres-secret
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres-secret # Name of the Secret object
+                key: POSTGRES_PASSWORD # Key within the Secret
+          - name: POSTGRES_USER
+            valueFrom:
+              secretKeyRef:
+                name: postgres-secret
+                key: POSTGRES_USER
+          - name: POSTGRES_DB # Define the database name to be created
+            value: "chat_db" # Let's name the DB 'chat_db'
+          - name: PGDATA # Tell Postgres where to store data within the container
+            value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+          - mountPath: /var/lib/postgresql/data # Mount the persistent volume here
+            name: postgres-storage
+        # Define basic resource requests/limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m" # 0.1 CPU
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc # Use the PVC created earlier

@@ -1,6 +1,14 @@
+# requirements.txt
 flask
 flask-socketio
 redis
 python-dotenv
 eventlet
 gunicorn
+psycopg2-binary # For PostgreSQL connection
+Flask-SQLAlchemy # ORM (Object-Relational Mapper) - simplifies DB interactions
+Flask-Migrate # Handles database schema changes
+Flask-Login # Manages user sessions (login/logout)
+Werkzeug # For password hashing (usually installed with Flask)
+Flask-WTF # For creating and validating forms (optional but good)
+email-validator # If using Flask-WTF for email validation
