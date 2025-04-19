@@ -1,5 +1,6 @@
 # app/main.py
 import logging # Added logging import just in case
+import os
 from flask import Blueprint, render_template, redirect, url_for, flash, session
 # Import login utilities required for protecting routes and getting user info
 from flask_login import login_required, current_user
