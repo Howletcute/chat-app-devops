@@ -33,7 +33,7 @@ echo "PostgreSQL started!"
 echo "Running database migrations..."
 # Ensure Flask context is set correctly for the commands
 export FLASK_APP=run:app
-flask db upgrade # Apply any pending migrations
+# flask db upgrade # Apply any pending migrations
 
 # --- Execute the main container command (CMD in Dockerfile) ---
 # "$@" passes along any arguments from the Dockerfile CMD
