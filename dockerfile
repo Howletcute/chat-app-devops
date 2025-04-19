@@ -22,6 +22,9 @@ COPY migrations ./migrations
 COPY config.py .
 COPY run.py .
 COPY entrypoint.sh /entrypoint.sh 
+COPY templates ./templates
+COPY static ./static
+
 # Copy script to root
 
 # Make entrypoint executable (redundant if chmod done locally, but safe)
