@@ -186,6 +186,3 @@ __pycache__/
 venv/
 env/
 .venv/
-
-# migrations
-migrations
