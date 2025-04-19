@@ -1,6 +1,10 @@
 # Dockerfile
 FROM python:3.12-slim-bookworm 
-# Keep updated base image
+
+# --- ADD Build Argument ---
+ARG APP_VERSION="unknown"
+# --- ADD Environment Variable ---
+ENV APP_VERSION=${APP_VERSION}
 
 WORKDIR /app
 

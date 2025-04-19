@@ -38,6 +38,24 @@ def settings():
     return render_template('settings.html',
                            title='User Settings',
                            current_color=current_color)
+@main.route('/about')
+def about():
+    """Displays application information."""
+    # Read version info passed during build as env var
+    app_version = os.environ.get('APP_VERSION', 'N/A')
+    # Construct links (replace with your actual username/repo)
+    repo_url = "https://github.com/Howletcute/chat-app-devops"
+    # Link to tag/branch specific changelog if possible, otherwise repo root
+    changelog_url = f"{repo_url}/blob/{app_version}/CHANGELOG.md" if app_version != 'N/A' else f"{repo_url}/blob/main/CHANGELOG.md"
+    issues_url = f"{repo_url}/issues"
+    new_issue_url = f"{repo_url}/issues/new"
+
+    return render_template('about.html',
+                           title='About',
+                           app_version=app_version,
+                           changelog_url=changelog_url,
+                           issues_url=issues_url,
+                           new_issue_url=new_issue_url)
 
 # Note: The previous POST route for '/chat' (which handled the old nickname form)
 # is no longer needed because login/authentication now handles user identity.

@@ -1,0 +1,24 @@
+{% extends "_base.html" %}
+
+{% block content %}
+    <h2>About Chat App</h2>
+    <p>A simple real-time chat application built with Flask, SocketIO, Redis, and PostgreSQL, deployed on Google Kubernetes Engine.</p>
+    <hr>
+    <p>
+        <strong>Running Version/Ref:</strong>
+        <code>{{ app_version | default('Unknown') }}</code>
+    </p>
+    <p>
+        <a href="{{ changelog_url | default('#') }}" target="_blank" rel="noopener noreferrer">View Changelog on GitHub</a>
+    </p>
+    <p>
+        Found a bug or have a suggestion?
+    </p>
+    <ul>
+        <li><a href="{{ issues_url | default('#') }}" target="_blank" rel="noopener noreferrer">View Existing Issues</a></li>
+        <li><a href="{{ new_issue_url | default('#') }}" target="_blank" rel="noopener noreferrer">Report a New Bug/Issue</a></li>
+        <li>(Note: Reporting requires repository to be public)</li>
+    </ul>
+    <hr>
+    <p><a href="{{ url_for('main.index') }}">Back to Home</a></p>
+{% endblock content %}
