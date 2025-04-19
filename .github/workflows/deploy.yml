@@ -44,6 +44,8 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/chat-app:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/chat-app:latest
+          no-cache: true # Forces a build without using cache layers
+          pull: true     # Always attempt to pull newer base images  
 
   # --- NEW DEPLOY JOB FOR GKE ---
   deploy-to-gke:
