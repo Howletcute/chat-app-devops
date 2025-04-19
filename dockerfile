@@ -1,27 +1,41 @@
 # Dockerfile
+FROM python:3.12-slim-bookworm 
+# Keep updated base image
 
-# 1. Use an official Python runtime
-FROM python:3.12-slim-bookworm
-
-# 2. Set the working directory
 WORKDIR /app
 
-# 3. Copy requirements first and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --trusted-host pypi.python.org -r requirements.txt
+# Install OS packages needed for psycopg2 build and netcat (for entrypoint wait)
+# Also install runtime dependencies like libpq5
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev netcat-openbsd libpq5 \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-# 4. Copy the rest of the application code (app.py, templates/)
-COPY . .
+# Install Python dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Make port 5000 available
+# Copy application code (ensure all necessary parts are included)
+# Copy the app package, migrations, config, run script, entrypoint
+COPY app ./app
+COPY migrations ./migrations
+COPY config.py .
+COPY run.py .
+COPY entrypoint.sh /entrypoint.sh 
+# Copy script to root
+
+# Make entrypoint executable (redundant if chmod done locally, but safe)
+RUN chmod +x /entrypoint.sh
+
+# Expose the port Gunicorn will run on inside the container
 EXPOSE 5000
 
-# 6. Define environment variables
-ENV FLASK_APP=app.py
+# Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV FLASK_CONFIG=prod 
+# Default to production config in container
 
-# 7. Define the command to run app using gunicorn with eventlet worker
-# Bind to 0.0.0.0:5000 inside the container
-# Use 1 worker (-w 1) for simplicity for now
-# 'app:app' tells gunicorn to load the 'app' instance from the 'app.py' file
+# Set the entrypoint script to run when container starts
+ENTRYPOINT ["/entrypoint.sh"]
+# Default command passed to the entrypoint script (exec "$@")
 CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "run:app"]

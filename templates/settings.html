@@ -1,0 +1,45 @@
+{% extends "_base.html" %}
+
+{% block content %}
+    <h2>User Settings</h2>
+    <p>Customize your appearance in the chat.</p>
+
+    <hr> {# Visual separator #}
+
+    <div id="color-picker-area">
+        <label for="nickname-color-picker" style="display: block; margin-bottom: 8px; font-weight: bold;">Nickname Color:</label>
+        <input type="color" id="nickname-color-picker" value="{{ current_color | default('#000000') }}" style="border: 1px solid var(--input-border); padding: 2px; cursor: pointer; width: 60px; height: 30px; vertical-align: middle; background-color: var(--input-bg);">
+        <span id="color-value" style="margin-left: 10px; font-family: monospace;">{{ current_color | default('#000000') }}</span> {# Display hex value #}
+    </div>
+
+    {# Add placeholders for future settings here #}
+
+{% endblock content %}
+
+{% block scripts %}
+    {# Include Socket.IO if not already loaded globally, but it should be from base or chat #}
+    {# We need it to emit the 'set_color' event #}
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        // Connect socket if not already connected globally (safer to just connect)
+        // Note: If connecting here AND in chat.html, you might get multiple connections.
+        // Consider a shared JS file or loading SocketIO globally once.
+        // For now, let's assume we need a connection here for the event.
+        const socket = io(location.origin);
+        const nicknameColorPicker = document.getElementById('nickname-color-picker');
+        const colorValueDisplay = document.getElementById('color-value');
+
+        socket.on('connect', () => { console.log('Socket connected on settings page.'); });
+
+        if (nicknameColorPicker) {
+            nicknameColorPicker.addEventListener('input', function(event) {
+                const newColor = event.target.value;
+                if (colorValueDisplay) {
+                     colorValueDisplay.textContent = newColor; // Update hex display live
+                }
+                console.log('Color changed, sending to server:', newColor);
+                socket.emit('set_color', { color: newColor }); // Send event to server
+            });
+        }
+    </script>
+{% endblock scripts %}

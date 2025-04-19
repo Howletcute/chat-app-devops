@@ -14,6 +14,8 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), index=True, unique=True, nullable=False)
     email = db.Column(db.String(120), index=True, unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False) # Store hash, not password
+    nickname_color = db.Column(db.String(7), nullable=True, default='#000000') # Stores #RRGGBB hex color
+
     # email_confirmed = db.Column(db.Boolean, default=False, nullable=False) # Add later if doing email confirmation
 
     # Method to store hashed password

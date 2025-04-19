@@ -1,0 +1,431 @@
+/* static/css/style.css */
+
+/* === CSS Variables === */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #212529;
+    --secondary-text-color: #6c757d;
+    --border-color: #dee2e6;
+    --link-color: #007bff;
+    --hover-color: #0056b3;
+    --button-bg: #007bff;
+    --button-text: #ffffff;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --input-text: #495057;
+    --message-odd-bg: #f8f9fa;
+    --sidebar-bg: #f1f3f5;
+    --alert-success-bg: #d4edda;
+    --alert-success-text: #155724;
+    --alert-success-border: #c3e6cb;
+    --alert-danger-bg: #f8d7da;
+    --alert-danger-text: #721c24;
+    --alert-danger-border: #f5c6cb;
+    --alert-info-bg: #d1ecf1;
+    --alert-info-text: #0c5460;
+    --alert-info-border: #bee5eb;
+    --focus-ring-color-rgba: rgba(0, 123, 255, 0.25);
+    /* Light theme focus */
+}
+
+/* === Dark Mode Overrides === */
+html.dark-mode {
+    --bg-color: #212529;
+    --text-color: #f8f9fa;
+    --secondary-text-color: #adb5bd;
+    --border-color: #495057;
+    --link-color: #6cb2eb;
+    --hover-color: #8fceff;
+    --button-bg: #6c757d;
+    --button-text: #ffffff;
+    --input-bg: #343a40;
+    --input-border: #495057;
+    --input-text: #f8f9fa;
+    --message-odd-bg: #343a40;
+    --sidebar-bg: #343a40;
+    --alert-success-bg: #14331d;
+    --alert-success-text: #a3cfbb;
+    --alert-success-border: #2b6a3f;
+    --alert-danger-bg: #582328;
+    --alert-danger-text: #f1b0b7;
+    --alert-danger-border: #8d3d45;
+    --alert-info-bg: #1c4a56;
+    --alert-info-text: #a8dde8;
+    --alert-info-border: #367685;
+    --focus-ring-color-rgba: rgba(108, 178, 235, 0.25);
+    /* Dark theme focus */
+}
+
+/* === Base Styles === */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    margin: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.content-wrapper {
+    flex-grow: 1;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* === Global Link Styles === */
+a {
+    color: var(--link-color);
+    text-decoration: underline; /* Add underline by default for visibility */
+    cursor: pointer;
+}
+
+a:hover {
+    color: var(--hover-color);
+    text-decoration: none; /* Optional: remove underline on hover */
+}
+
+/* === Alert Styles === */
+.alert {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+}
+
+.alert-success {
+    color: var(--alert-success-text);
+    background-color: var(--alert-success-bg);
+    border-color: var(--alert-success-border);
+}
+
+.alert-danger {
+    color: var(--alert-danger-text);
+    background-color: var(--alert-danger-bg);
+    border-color: var(--alert-danger-border);
+}
+
+.alert-info {
+    color: var(--alert-info-text);
+    background-color: var(--alert-info-bg);
+    border-color: var(--alert-info-border);
+}
+
+/* === Navigation Styles === */
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    flex-shrink: 0;
+}
+
+nav .links a {
+    margin-right: 15px;
+    text-decoration: none;
+    color: var(--link-color);
+    font-weight: 500;
+}
+
+nav .links a:hover {
+    text-decoration: underline;
+    color: var(--hover-color);
+}
+
+/* === Theme Toggle Styles === */
+.theme-switch-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+.theme-switch-wrapper span {
+    margin: 0 5px;
+    font-size: 1.2em;
+    user-select: none;
+}
+
+.theme-switch {
+    display: inline-block;
+    height: 20px;
+    position: relative;
+    width: 40px;
+}
+
+.theme-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 20px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+html.dark-mode .slider:before {
+    transform: translateX(20px);
+}
+
+input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+input:checked+.slider {
+    background-color: #555;
+}
+
+input:focus+.slider {
+    box-shadow: 0 0 1px var(--link-color);
+}
+
+input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+html.dark-mode .slider {
+    background-color: #6c757d;
+}
+
+html.dark-mode input:checked+.slider {
+    background-color: var(--link-color);
+}
+
+/* === Basic Form Styling === */
+form div {
+    margin-bottom: 1rem;
+}
+
+form label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+}
+
+form input[type="text"],
+form input[type="email"],
+form input[type="password"] {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+form input[type="checkbox"] {
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
+form input:focus {
+    outline: none;
+    border-color: var(--link-color);
+    box-shadow: 0 0 0 2px var(--focus-ring-color-rgba);
+    /* Use variable for focus */
+}
+
+.form-error {
+    font-size: 0.8em;
+    color: #dc3545;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+html.dark-mode .form-error {
+    color: #f5c6cb;
+}
+
+/* Fallback for direct style (though WTForms template uses class now ideally) */
+form span[style*="color: red"] {
+    font-size: 0.8em;
+    color: #dc3545 !important;
+}
+
+html.dark-mode form span[style*="color: red"] {
+    color: #f5c6cb !important;
+}
+
+form input[type="submit"],
+form button {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+form input[type="submit"]:hover,
+form button:hover {
+    opacity: 0.9;
+}
+
+/* === Chat Layout Styles (Increased Specificity) === */
+body #chat-layout {
+    display: flex;
+    /* Adjust height calc based on actual nav height (~61px maybe?) */
+    height: calc(100vh - 81px);
+    /* Adjust as needed based on nav/padding */
+    border: 1px solid var(--border-color);
+    margin-top: 0;
+    /* Remove extra margin if container handles padding */
+}
+
+body #sidebar {
+    width: 150px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-color);
+    padding: 10px;
+    overflow-y: auto;
+    background-color: var(--sidebar-bg);
+    height: 100%;
+    box-sizing: border-box;
+}
+
+body #sidebar h3 {
+    margin-top: 0;
+    font-size: 1em;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+    color: var(--text-color);
+}
+
+body #sidebar ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+body #sidebar ul li {
+    padding: 3px 0;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-color);
+}
+
+body #sidebar ul li[data-isme="true"] {
+    /* Style self in user list */
+    font-weight: bold;
+    color: var(--link-color);
+}
+
+body #chat-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--bg-color);
+}
+
+body #messages {
+    list-style-type: none;
+    margin: 0;
+    padding: 1rem;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+body #messages>li {
+    padding: 0.5rem 1rem;
+    word-wrap: break-word;
+}
+
+body #messages>li:nth-child(odd) {
+    background-color: var(--message-odd-bg);
+}
+
+body #messages>li strong {
+    color: var(--link-color);
+}
+
+/* Style nickname */
+html.dark-mode #messages>li strong {
+    color: var(--link-color);
+}
+
+body #form {
+    /* Targeting the chat input form specifically */
+    background: color-mix(in srgb, var(--bg-color) 90%, var(--border-color));
+    padding: 0.5rem;
+    display: flex;
+    height: 3.5rem;
+    box-sizing: border-box;
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+html.dark-mode #form {
+    background: color-mix(in srgb, var(--bg-color) 90%, var(--border-color));
+}
+
+/* Adjust dark mode form bg if needed */
+
+body #input {
+    /* Targeting chat input specifically */
+    border: 1px solid var(--input-border);
+    padding: 0 1rem;
+    flex-grow: 1;
+    border-radius: 2rem;
+    margin-right: 0.5rem;
+    background-color: var(--input-bg);
+    color: var(--input-text);
+    font-size: 1rem;
+}
+
+body #input:focus {
+    outline: none;
+    border-color: var(--link-color);
+}
+
+/* Button styles inherited */
+
+/* Status message styling */
+.status-message {
+    font-style: italic;
+    color: var(--secondary-text-color);
+    text-align: center;
+    padding: 0.25rem 1rem;
+    font-size: 0.9em;
+}

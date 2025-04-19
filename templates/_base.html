@@ -8,43 +8,72 @@
     {% else %}
         <title>Chat App</title>
     {% endif %}
-    <style>
-        body { font-family: sans-serif; margin: 20px; }
-        .container { max-width: 800px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
-        .alert { padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px; }
-        .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
-        .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
-        .alert-warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; }
-        .alert-info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
-        nav { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-        nav a { margin-right: 15px; text-decoration: none; color: #007bff; }
-        nav a:hover { text-decoration: underline; }
-    </style>
+
+    <script>
+        (function() {
+          try {
+            // Check localStorage first
+            var theme = localStorage.getItem('theme');
+            // If no preference saved, check system preference
+            if (!theme) {
+              theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            // If theme is dark, add class to HTML element (available early)
+            if (theme === 'dark') {
+              document.documentElement.classList.add('dark-mode');
+            }
+          } catch (e) {
+            // Catch errors in case localStorage/matchMedia isn't available
+            console.error("Error setting initial theme:", e);
+          }
+        })();
+      </script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    {% block head_extra %}{% endblock %}
+</head>
 </head>
 <body>
     <nav>
-        <a href="{{ url_for('main.index') }}">Home</a>           {# Change 'index' to 'main.index' #}
-        {% if current_user.is_authenticated %}
-            <a href="{{ url_for('main.chat') }}">Chat</a>             {# Change 'chat' to 'main.chat' #}
-            <a href="{{ url_for('auth.logout') }}">Logout ({{ current_user.username }})</a> {# Change 'logout' to 'auth.logout' #}
-        {% else %}
-            <a href="{{ url_for('auth.login') }}">Login</a>           {# Change 'login' to 'auth.login' #}
-            <a href="{{ url_for('auth.register') }}">Register</a>       {# Change 'register' to 'auth.register' #}
-        {% endif %}
-    </nav>
-    <hr>
-    <div class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">
-                        {{ message }}
-                    </div>
-                {% endfor %}
+        <div class="links">
+            <a href="{{ url_for('main.index') }}">Home</a>
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('main.chat') }}">Chat</a>
+                <a href="{{ url_for('main.settings') }}">Settings</a>
+                <a href="{{ url_for('auth.logout') }}">Logout ({{ current_user.username }})</a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}">Login</a>
+                <a href="{{ url_for('auth.register') }}">Register</a>
             {% endif %}
-        {% endwith %}
+        </div>
+        <div class="theme-switch-wrapper">
+            <span>☀️</span>
+            <label class="theme-switch" for="theme-toggle">
+                <input type="checkbox" id="theme-toggle" />
+                <div class="slider"></div>
+            </label>
+            <span>🌙</span>
+        </div>
+    </nav>
 
-        {% block content %}{% endblock %}
-    </div>
+    <main class="content-wrapper">
+        <div class="container">
+            {% with messages = get_flashed_messages(with_categories=True) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    {% block scripts %}{% endblock %}
+    <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </body>
 </html>

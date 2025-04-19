@@ -1,24 +1,29 @@
 # app/events.py
 import logging
 from flask import request
-from flask_login import current_user # Need this to check auth status
+from flask_login import current_user
 from flask_socketio import emit, join_room, leave_room
-# Import the socketio instance and redis_client created in app/__init__.py
-# The '.' means import from the current package ('app')
-from . import socketio, redis_client
+# Import necessary components from the app package (__init__)
+from . import socketio, redis_client, db
+# Needs the User model for database operations
+from .models import User
 
-# === Constants (Moved from app.py) ===
+# === Constants ===
 GENERAL_ROOM = "general_chat"
 MESSAGE_HISTORY_KEY = f"room:{GENERAL_ROOM}:messages" # Redis list key
 SID_NICKNAME_MAP_KEY = "sid_nickname_map" # Redis Hash mapping session ID to nickname
 MAX_MESSAGES = 50
 
-# === Helper Functions (Moved from app.py, now use imported redis_client) ===
+# === Helper Functions ===
 # (Includes basic error handling for Redis operations)
-def add_message(nickname, msg):
+
+def add_message(nickname, msg, color): # Added color parameter
+    """Adds message WITH color to Redis history list."""
     if redis_client:
         try:
-            message_data = f"{nickname}: {msg}"
+            separator = "|||" # Define separator
+            # Store data as "nickname|||#RRGGBB|||message content"
+            message_data = f"{nickname}{separator}{color}{separator}{msg}"
             redis_client.lpush(MESSAGE_HISTORY_KEY, message_data)
             redis_client.ltrim(MESSAGE_HISTORY_KEY, 0, MAX_MESSAGES - 1)
         except Exception as e:
@@ -27,6 +32,7 @@ def add_message(nickname, msg):
         logging.warning("Redis client not available, message not stored.")
 
 def get_message_history():
+    """Retrieves message history strings from Redis."""
     if redis_client:
         try:
             return redis_client.lrange(MESSAGE_HISTORY_KEY, 0, MAX_MESSAGES - 1)
@@ -35,6 +41,7 @@ def get_message_history():
     return [] # Return empty list if no Redis or error
 
 def add_online_user(sid, nickname):
+    """Maps a SocketIO SID to a nickname in Redis."""
     if redis_client and nickname and sid:
         try:
             redis_client.hset(SID_NICKNAME_MAP_KEY, sid, nickname)
@@ -44,7 +51,8 @@ def add_online_user(sid, nickname):
     # Silently ignore if no redis or missing data
 
 def remove_online_user(sid):
-     if redis_client and sid:
+    """Removes SID mapping from Redis and returns the associated nickname."""
+    if redis_client and sid:
         try:
             nickname = redis_client.hget(SID_NICKNAME_MAP_KEY, sid)
             if nickname:
@@ -54,21 +62,24 @@ def remove_online_user(sid):
             # else: SID wasn't in map
         except Exception as e:
             logging.error(f"Redis error removing online user (SID: {sid}): {e}")
-     return None # Return None if not found or error or no redis
+    return None # Return None if not found or error or no redis
 
 def get_online_users():
-     if redis_client:
+    """Gets a unique, sorted list of online nicknames from Redis."""
+    if redis_client:
         try:
             # Get unique nicknames from the values in the SID map
             users = redis_client.hvals(SID_NICKNAME_MAP_KEY)
             unique_users = sorted(list(set(users)))
-            # logging.info(f"Current online users (from SID map): {unique_users}") # Maybe too verbose
+            # logging.info(f"Current online users (from SID map): {unique_users}") # Verbose
             return unique_users
         except Exception as e:
             logging.error(f"Redis error getting online users: {e}")
-     return [] # Return empty list if no Redis or error
+    return [] # Return empty list if no Redis or error
 
+# get_nickname_from_sid not currently used by handlers, but keep for potential future use
 def get_nickname_from_sid(sid):
+    """Gets nickname associated with a specific SID from Redis."""
     if redis_client and sid:
         try:
             return redis_client.hget(SID_NICKNAME_MAP_KEY, sid)
@@ -78,73 +89,124 @@ def get_nickname_from_sid(sid):
 
 
 # === SocketIO Event Handlers ===
-# These handlers use the '@socketio.on' decorator, using the
-# 'socketio' instance imported from app/__init__.py
 
 @socketio.on('connect')
 def handle_connect():
-    # Check if user is logged in via Flask-Login session before allowing connection
+    """Handles new client connections after user is authenticated."""
     if not current_user.is_authenticated:
         logging.warning(f"Unauthenticated SocketIO connection attempt denied: {request.sid}")
-        return False # Reject connection by returning False
+        return False # Reject connection
 
-    # User is authenticated, get their details
     nickname = current_user.username
     sid = request.sid
     logging.info(f'Authenticated client connected: {nickname} ({sid})')
 
-    # Add to room, track user, notify others
+    # Add user to room and Redis map
     join_room(GENERAL_ROOM)
-    add_online_user(sid, nickname) # Add to our Redis SID->Nickname map
+    add_online_user(sid, nickname)
+
+    # Notify room members of the new user
     emit('status', {'msg': f'{nickname} has joined the chat.'}, to=GENERAL_ROOM)
+    # Broadcast updated user list to everyone
     emit('user_list_update', get_online_users(), broadcast=True)
 
     # Send message history only to the newly connected client
     history = get_message_history()
-    history.reverse() # Show oldest first
+    history.reverse() # Show oldest messages first
     for msg_data in history:
         try:
-            parts = msg_data.split(":", 1) # Simple split, assumes ':' isn't in nickname
-            hist_nick = parts[0]
-            hist_msg = parts[1].strip() if len(parts) > 1 else ""
-            emit('chat_message', {'nickname': hist_nick, 'msg': hist_msg}, room=sid)
+            separator = "|||"
+            parts = msg_data.split(separator, 2)
+            hist_nick = "Error"
+            hist_color = '#888888' # Default error color
+            hist_msg = "(message format error)"
+
+            if len(parts) == 3:
+                hist_nick, hist_color, hist_msg = parts
+                if not hist_color.startswith('#') or len(hist_color) != 7:
+                    hist_color = '#000000' # Default color if format invalid
+            elif len(parts) == 1: # Handle potential old format "nickname: msg"
+                legacy_parts = msg_data.split(":", 1)
+                hist_nick = legacy_parts[0]
+                hist_msg = legacy_parts[1].strip() if len(legacy_parts) > 1 else ""
+                hist_color = '#000000' # Default color for old format
+
+            # Emit historical message with color to the connecting client only
+            emit('chat_message', {'nickname': hist_nick, 'msg': hist_msg, 'color': hist_color}, room=sid)
         except Exception as e:
             logging.error(f"Error processing history message '{msg_data}': {e}")
 
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    # Find out who disconnected using the SID map (current_user might be gone)
+    """Handles client disconnections."""
     sid = request.sid
-    nickname = remove_online_user(sid) # Remove user by SID from Redis map
+    # Remove user from Redis map, get their nickname if found
+    nickname = remove_online_user(sid)
     if nickname:
-        # If we found the user, leave room and notify others
+        # If user was mapped, leave room and notify others
         leave_room(GENERAL_ROOM)
         logging.info(f'Client disconnected: {nickname} ({sid})')
         emit('status', {'msg': f'{nickname} has left the chat.'}, to=GENERAL_ROOM)
-        emit('user_list_update', get_online_users(), broadcast=True) # Send updated list
+        emit('user_list_update', get_online_users(), broadcast=True) # Update user list for all
     else:
-        # This might happen if disconnect occurs before successful connect/join
+        # Might be unauthenticated user or already cleaned up
         logging.info(f'Unmapped client disconnected: {sid}')
+
+
+@socketio.on('set_color')
+def handle_set_color(data):
+    """Handles client sending a new nickname color preference."""
+    if not current_user.is_authenticated:
+        logging.warning(f"Unauthenticated set_color attempt ignored from {request.sid}")
+        return
+
+    new_color = data.get('color')
+    # Basic hex color validation
+    if not new_color or not isinstance(new_color, str) or \
+       not new_color.startswith('#') or len(new_color) != 7:
+        logging.warning(f"Invalid color format '{new_color}' from {current_user.username}")
+        emit('error', {'msg': 'Invalid color format (#RRGGBB required).'}, room=request.sid)
+        return
+
+    try:
+        # Use db.session.get for safe primary key lookup
+        user = db.session.get(User, current_user.id)
+        if user:
+            user.nickname_color = new_color
+            db.session.commit() # Save change to Postgres
+            logging.info(f"User {user.username} updated nickname color to {new_color}")
+            # emit('status', {'msg': f'Color updated to {new_color}'}, room=request.sid) # Optional confirmation
+        else:
+             logging.error(f"Could not find user {current_user.id} in DB to update color.")
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Database error updating color for user {current_user.username}: {e}")
+        emit('error', {'msg': 'Server error saving color preference.'}, room=request.sid)
 
 
 @socketio.on('new_message')
 def handle_new_message(data):
-    # Ensure user is authenticated via Flask-Login before processing message
+    """Handles receiving and broadcasting new chat messages."""
     if not current_user.is_authenticated:
         logging.warning(f"Message received from unauthenticated SID: {request.sid}")
-        return # Ignore message
+        return
 
-    # Get username from the verified logged-in user session
     nickname = current_user.username
+    # Fetch current color from the authenticated user object
+    user_color = current_user.nickname_color or '#000000' # Default to black
     sid = request.sid
-    msg = data.get('msg', '') # Get message content sent by client
+    msg = data.get('msg', '')
 
-    if msg and nickname: # Process only if message is not empty and user is known
-        logging.info(f'Message from {nickname} ({sid}): {msg}')
-        add_message(nickname, msg) # Store message (using Redis helper)
-        # Broadcast message to everyone in the general room
-        emit('chat_message', {'nickname': nickname, 'msg': msg}, to=GENERAL_ROOM)
-    elif not msg:
+    if msg.strip() and nickname: # Process only if message not empty/whitespace
+        msg = msg.strip() # Trim whitespace
+        logging.info(f'Message from {nickname} ({sid}) color {user_color}: {msg}')
+        # Add message with color to Redis history
+        add_message(nickname, msg, user_color)
+        # Broadcast message, including sender's color, to the general room
+        emit('chat_message',
+             {'nickname': nickname, 'msg': msg, 'color': user_color},
+             to=GENERAL_ROOM) # Use to=GENERAL_ROOM to send to everyone
+    elif nickname: # Message was empty or just whitespace
          logging.warning(f"Empty message received from {nickname} ({sid})")
-    # No 'else' needed as nickname should always be present if authenticated
+    # No need for else, shouldn't happen if authenticated

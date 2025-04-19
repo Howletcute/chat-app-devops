@@ -1,129 +1,260 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Simple Chat</title>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <style>
-        body { margin: 0; padding-bottom: 3rem; font-family: sans-serif; display: flex; height: 100vh; box-sizing: border-box; }
-        #sidebar { width: 150px; border-right: 1px solid #ccc; padding: 10px; overflow-y: auto; background-color: #f7f7f7; box-sizing: border-box; height: 100%; }
-        #sidebar h3 { margin-top: 0; font-size: 1em; }
-        #sidebar ul { list-style-type: none; padding: 0; margin: 0; }
-        #sidebar ul li { padding: 2px 0; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #chat-area { flex-grow: 1; display: flex; flex-direction: column; height: 100%; }
-        #messages { list-style-type: none; margin: 0; padding: 1rem; overflow-y: auto; flex-grow: 1; border-bottom: 1px solid #ccc; }
-        #messages > li { padding: 0.5rem 1rem; word-wrap: break-word; }
-        #messages > li:nth-child(odd) { background: #efefef; }
-        #form { background: rgba(0, 0, 0, 0.1); padding: 0.5rem; display: flex; height: 3.5rem; box-sizing: border-box; }
-        #input { border: 1px solid #ccc; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin-right: 0.5rem; }
-        #input:focus { outline: none; border-color: #999; }
-        #form > button { background: #333; border: none; padding: 0 1rem; border-radius: 3px; outline: none; color: #fff; cursor: pointer; }
-        #form > button:hover { background: #444; }
-        /* Style for status messages */
-        .status-message { font-style: italic; color: #666; text-align: center; padding: 0.25rem 1rem; font-size: 0.9em; }
-    </style>
-</head>
-<body>
+{% extends "_base.html" %} {# Inherits base layout, CSS vars, theme script #}
+
+{% block head_styles %}
+{# Chat-specific styles or overrides #}
+<style>
+  /* Override base body margin/padding for full-height chat */
+  body { margin: 0; }
+  .content-wrapper { padding: 0; }
+  .container { max-width: none; margin-left: 0; margin-right: 0; padding: 0; border: none; }
+
+  /* Chat layout styles */
+  #chat-layout {
+      display: flex;
+      /* Adjust height calc based on actual nav height (~61px) */
+      height: calc(100vh - 61px); /* Fill remaining viewport height */
+      border-top: 1px solid var(--border-color);
+  }
+  #sidebar {
+      width: 170px; /* Slightly wider for color picker */
+      flex-shrink: 0;
+      border-right: 1px solid var(--border-color);
+      padding: 15px; /* Increased padding */
+      overflow-y: auto;
+      background-color: var(--sidebar-bg);
+      height: 100%;
+      box-sizing: border-box;
+      display: flex; /* Use flexbox for vertical layout */
+      flex-direction: column;
+  }
+  #sidebar h3 {
+      margin-top: 0;
+      font-size: 1.1em; /* Slightly larger heading */
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      color: var(--text-color);
+      flex-shrink: 0; /* Prevent shrinking */
+  }
+  #sidebar ul#user-list {
+      list-style-type: none; padding: 0; margin: 0;
+      overflow-y: auto; /* Allow user list to scroll if long */
+      flex-grow: 1; /* Allow list to fill space */
+      margin-bottom: 15px; /* Space before color picker */
+  }
+  #sidebar ul li {
+      padding: 4px 0; /* More spacing */
+      font-size: 0.9em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--secondary-text-color); /* Dimmer color for other users */
+      transition: color 0.2s;
+  }
+   #sidebar ul li[data-isme="true"] { /* Style for current user */
+        font-weight: bold;
+        color: var(--link-color); /* Use theme link color */
+    }
+
+  /* Style for the color picker area */
+  #color-picker-area {
+      padding: 10px 0; /* Padding top/bottom only */
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+      flex-shrink: 0; /* Prevent shrinking */
+  }
+  #color-picker-area label {
+      display: block;
+      margin-bottom: 8px; /* More space */
+      font-size: 0.9em;
+      font-weight: 500; /* Slightly less bold */
+      color: var(--secondary-text-color);
+  }
+  #nickname-color-picker {
+      border: 1px solid var(--input-border);
+      padding: 2px; /* Slight padding around color */
+      cursor: pointer;
+      width: 60px; /* Make it slightly larger */
+      height: 30px;
+      vertical-align: middle;
+      background-color: var(--input-bg); /* Match input background */
+      border-radius: 4px;
+  }
+
+  #chat-area {
+      flex-grow: 1; display: flex; flex-direction: column; height: 100%;
+      background-color: var(--bg-color);
+  }
+  #messages {
+      list-style-type: none; margin: 0; padding: 1rem; overflow-y: auto; flex-grow: 1;
+  }
+  #messages > li { padding: 0.5rem 1rem; word-wrap: break-word; margin-bottom: 0.25rem; }
+  #messages > li:nth-child(odd) { background-color: var(--message-odd-bg); }
+   #messages > li strong { /* Nickname styling handled by JS now */
+       font-weight: bold;
+       margin-right: 0.5em;
+   }
+   /* Status message styling */
+   .status-message {
+       font-style: italic;
+       color: var(--secondary-text-color);
+       text-align: center;
+       padding: 0.5rem 1rem;
+       font-size: 0.9em;
+       border-bottom: 1px dashed var(--border-color);
+       margin-bottom: 0.5rem;
+   }
+   #messages > li.status-message:nth-child(odd) { background-color: transparent; } /* Don't stripe status messages */
+
+  #form {
+      background: color-mix(in srgb, var(--bg-color) 90%, var(--border-color));
+      padding: 0.75rem 1rem; /* Slightly more padding */
+      display: flex; height: auto; /* Adjust height */ min-height: 3.5rem;
+      box-sizing: border-box; border-top: 1px solid var(--border-color);
+      flex-shrink: 0;
+      align-items: center; /* Vertically align items */
+  }
+  #input {
+      border: 1px solid var(--input-border);
+      padding: 0.5rem 1rem; /* Match form padding */
+      flex-grow: 1; border-radius: 2rem; margin-right: 0.75rem;
+      background-color: var(--input-bg); color: var(--input-text); font-size: 1rem;
+  }
+  #input:focus { outline: none; border-color: var(--link-color); }
+  /* Button styles inherited from _base.html */
+
+</style>
+{% endblock head_styles %}
+
+
+{% block content %}
+{# Main chat layout structure #}
+<div id="chat-layout">
     <div id="sidebar">
         <h3>Online</h3>
-        <ul id="user-list"></ul>
+        <ul id="user-list">
+            </ul>
     </div>
     <div id="chat-area">
-        <ul id="messages"></ul>
+        <ul id="messages">
+            </ul>
         <form id="form" action="">
-            <input id="input" autocomplete="off" placeholder="Type message..." /><button>Send</button>
+            <input id="input" autocomplete="off" placeholder="Type message..." />
+            <button type="submit">Send</button> {# Explicit type="submit" #}
         </form>
     </div>
+</div>
+{% endblock content %}
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script> <script>
-        // No longer need to get nickname from template/sessionStorage on client side
-        // Server knows user identity via Flask-Login session
+{% block scripts %}
+{# theme.js is already loaded by _base.html #}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+    // Get current user's nickname from template context (passed by Flask route)
+    const currentNickname = "{{ nickname }}";
 
-        const socket = io(location.origin);
-        const messages = document.getElementById('messages');
-        const form = document.getElementById('form');
-        const input = document.getElementById('input');
-        const userList = document.getElementById('user-list');
+    // Get DOM elements
+    const socket = io(location.origin); // Connect to SocketIO server
+    const messages = document.getElementById('messages');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const userList = document.getElementById('user-list');
 
-        // --- Emit Events ---
+    // --- Function Definitions ---
 
-        // Connect event is handled mostly server-side now for authenticated users
-        socket.on('connect', () => {
-            console.log('Socket connected to server.');
-            // No explicit 'join' needed, server handles on connect if authenticated
-        });
+    // Renders a chat message with optional nickname color
+    function addChatMessage(nickname, msg, color = 'var(--text-color)') { // Default to CSS text color
+        const item = document.createElement('li');
+        const safeNickname = nickname.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const safeMsg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-        // Send message when form is submitted
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (input.value) {
-                // Client doesn't strictly NEED to send nickname if server uses current_user,
-                // but can be useful for logging or if session handling is complex.
-                // Let's keep sending it for now. The server will prioritize current_user.
-                socket.emit('new_message', { msg: input.value, nickname: '{{ current_user.username }}' }); // Use Jinja2 to get username IF needed, or remove
-                // Simpler: just send msg, server knows sender
-                // socket.emit('new_message', { msg: input.value });
-                input.value = '';
-            }
-        });
+        // Apply color via inline style if provided and valid hex
+        // Basic check: starts with #, 7 chars long
+        const isValidColor = /^#[0-9A-F]{6}$/i.test(color);
+        const nicknameStyle = isValidColor ? `style="color: ${color};"` : `style="color: var(--link-color);"` ; // Fallback style
 
-        // --- Listen for Events ---
-        socket.on('chat_message', (data) => {
-            // ... (message rendering remains same) ...
-             const item = document.createElement('li');
-            const safeNickname = data.nickname.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            const safeMsg = data.msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            item.innerHTML = `<strong>${safeNickname}:</strong> ${safeMsg}`;
-            messages.appendChild(item);
-            messages.scrollTop = messages.scrollHeight;
-        });
+        // Add specific class if message is from current user
+        if (safeNickname === currentNickname) {
+            item.classList.add('my-message'); // Add class for potential specific styling
+             item.innerHTML = `<strong ${nicknameStyle}>${safeNickname} (You):</strong> ${safeMsg}`;
+        } else {
+             item.innerHTML = `<strong ${nicknameStyle}>${safeNickname}:</strong> ${safeMsg}`;
+        }
+        messages.appendChild(item);
+        // Auto-scroll to bottom only if user is near the bottom already
+        const shouldScroll = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+        if (shouldScroll) {
+             messages.scrollTop = messages.scrollHeight;
+        }
+    }
 
-        socket.on('status', (data) => {
-            // ... (status rendering remains same) ...
-             const item = document.createElement('li');
-            item.className = 'status-message';
-            const safeMsg = data.msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            item.textContent = safeMsg;
-            messages.appendChild(item);
-            messages.scrollTop = messages.scrollHeight;
-        });
+    // Renders a status message (join/leave)
+    function addStatusMessage(msg) {
+        const item = document.createElement('li');
+        item.className = 'status-message'; // Use class defined in CSS
+        const safeMsg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        item.textContent = safeMsg;
+        messages.appendChild(item);
+        messages.scrollTop = messages.scrollHeight;
+    }
 
-         socket.on('user_list_update', (users) => {
-            // ... (user list rendering remains same) ...
-             userList.innerHTML = '';
-            if (users && users.length > 0) {
-                users.forEach(user => {
-                    const item = document.createElement('li');
-                    const safeUser = user.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    item.textContent = safeUser;
-                    // Optionally highlight own nickname based on current_user passed if needed
-                    // if (safeUser === '{{ current_user.username }}') {
-                    //     item.style.fontWeight = 'bold';
-                    // }
-                    userList.appendChild(item);
-                });
-            } else {
+    // Updates the online user list
+    function updateUserList(users) {
+        userList.innerHTML = ''; // Clear current list
+        if (users && users.length > 0) {
+            users.forEach(user => {
                 const item = document.createElement('li');
-                item.textContent = 'No users online';
-                item.style.fontStyle = 'italic';
+                const safeUser = user.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                item.textContent = safeUser;
+                if (safeUser === currentNickname) {
+                    item.dataset.isme = "true"; // Use data attribute for styling self
+                }
                 userList.appendChild(item);
-            }
-        });
-
-        socket.on('error', (data) => {
-            alert(`Server Error: ${data.msg}`);
-        });
-
-        socket.on('disconnect', (reason) => {
-             // ... (disconnect handling remains same) ...
-            console.log('Socket disconnected:', reason);
+            });
+        } else {
             const item = document.createElement('li');
-            item.className = 'status-message';
-            item.textContent = 'You have been disconnected.';
-            messages.appendChild(item);
-            messages.scrollTop = messages.scrollHeight;
-        });
+            item.textContent = 'Nobody online';
+            item.style.fontStyle = 'italic';
+            userList.appendChild(item);
+        }
+    }
 
-    </script>
-</body>
-</html>
+    // --- Emit Events ---
+    socket.on('connect', () => {
+        console.log('Socket connected.');
+        // Server side 'connect' handler now deals with join logic
+    });
+
+    form.addEventListener('submit', (e) => {
+        e.preventDefault(); // Prevent page reload
+        if (input.value.trim()) { // Send only if not just whitespace
+            socket.emit('new_message', { msg: input.value }); // Server knows sender
+            input.value = ''; // Clear input field
+        }
+        input.focus(); // Keep focus on input
+    });
+
+    // --- Listen for Server Events ---
+    socket.on('chat_message', (data) => {
+        // Pass received color (or default) to rendering function
+        addChatMessage(data.nickname, data.msg, data.color || 'var(--link-color)'); // Use theme link color as fallback
+    });
+    socket.on('status', (data) => {
+        addStatusMessage(data.msg);
+    });
+     socket.on('user_list_update', (users) => {
+        updateUserList(users);
+     });
+    socket.on('error', (data) => {
+        // Display errors from server more nicely?
+        addStatusMessage(`Error: ${data.msg}`);
+        console.error("Server Error:", data.msg);
+    });
+    socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+        addStatusMessage('You have been disconnected. Please refresh if needed.');
+        // Optionally grey out input or show reconnecting status
+    });
+
+</script>
+{% endblock scripts %}
