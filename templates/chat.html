@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Simple Chat</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         body { margin: 0; padding-bottom: 3rem; font-family: sans-serif; display: flex; height: 100vh; box-sizing: border-box; }
         #sidebar { width: 150px; border-right: 1px solid #ccc; padding: 10px; overflow-y: auto; background-color: #f7f7f7; box-sizing: border-box; height: 100%; }
@@ -25,31 +26,20 @@
 <body>
     <div id="sidebar">
         <h3>Online</h3>
-        <ul id="user-list">
-            </ul>
+        <ul id="user-list"></ul>
     </div>
-
     <div id="chat-area">
-        <ul id="messages">
-            </ul>
+        <ul id="messages"></ul>
         <form id="form" action="">
-            <input id="input" autocomplete="off" placeholder="Type message..." />
-            <button>Send</button>
+            <input id="input" autocomplete="off" placeholder="Type message..." /><button>Send</button>
         </form>
     </div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script> <script>
+        // No longer need to get nickname from template/sessionStorage on client side
+        // Server knows user identity via Flask-Login session
 
-    <script>
-        // Get nickname passed from Flask template via server-side rendering
-        const nickname = "{{ nickname }}";
-        // Store in sessionStorage in case needed, though we primarily use the variable
-        sessionStorage.setItem('nickname', nickname);
-
-        // Connect to the Socket.IO server (assumes same origin)
         const socket = io(location.origin);
-
-        // Get references to HTML elements
         const messages = document.getElementById('messages');
         const form = document.getElementById('form');
         const input = document.getElementById('input');
@@ -57,63 +47,59 @@
 
         // --- Emit Events ---
 
-        // Send a 'join' event AFTER successfully connecting
+        // Connect event is handled mostly server-side now for authenticated users
         socket.on('connect', () => {
-            console.log('Socket connected, emitting join event for:', nickname);
-            if (nickname) {
-                socket.emit('join', { nickname: nickname });
-            } else {
-                console.error('Nickname is missing, cannot join chat.');
-                // Optionally redirect back to login or show error
-                // window.location.href = "/"; // Example redirect
-            }
+            console.log('Socket connected to server.');
+            // No explicit 'join' needed, server handles on connect if authenticated
         });
 
         // Send message when form is submitted
         form.addEventListener('submit', (e) => {
-            e.preventDefault(); // Prevent page reload
-            if (input.value && nickname) { // Ensure message and nickname exist
-                // Send nickname with message data
-                socket.emit('new_message', { msg: input.value, nickname: nickname });
-                input.value = ''; // Clear input field
+            e.preventDefault();
+            if (input.value) {
+                // Client doesn't strictly NEED to send nickname if server uses current_user,
+                // but can be useful for logging or if session handling is complex.
+                // Let's keep sending it for now. The server will prioritize current_user.
+                socket.emit('new_message', { msg: input.value, nickname: '{{ current_user.username }}' }); // Use Jinja2 to get username IF needed, or remove
+                // Simpler: just send msg, server knows sender
+                // socket.emit('new_message', { msg: input.value });
+                input.value = '';
             }
         });
 
         // --- Listen for Events ---
-
-        // Append a regular chat message to the list
         socket.on('chat_message', (data) => {
-            const item = document.createElement('li');
-            // Basic sanitization (replace < and >) to prevent simple HTML injection
+            // ... (message rendering remains same) ...
+             const item = document.createElement('li');
             const safeNickname = data.nickname.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             const safeMsg = data.msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            item.innerHTML = `<strong>${safeNickname}:</strong> ${safeMsg}`; // Use innerHTML to allow <strong>
+            item.innerHTML = `<strong>${safeNickname}:</strong> ${safeMsg}`;
             messages.appendChild(item);
-            messages.scrollTop = messages.scrollHeight; // Scroll to bottom
+            messages.scrollTop = messages.scrollHeight;
         });
 
-        // Append a status message (like join/leave)
         socket.on('status', (data) => {
-            const item = document.createElement('li');
-            item.className = 'status-message'; // Apply specific style
+            // ... (status rendering remains same) ...
+             const item = document.createElement('li');
+            item.className = 'status-message';
             const safeMsg = data.msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             item.textContent = safeMsg;
             messages.appendChild(item);
-            messages.scrollTop = messages.scrollHeight; // Scroll to bottom
+            messages.scrollTop = messages.scrollHeight;
         });
 
-         // Update the online user list
          socket.on('user_list_update', (users) => {
-            userList.innerHTML = ''; // Clear current list
+            // ... (user list rendering remains same) ...
+             userList.innerHTML = '';
             if (users && users.length > 0) {
                 users.forEach(user => {
                     const item = document.createElement('li');
                     const safeUser = user.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                     item.textContent = safeUser;
-                    // Optionally highlight own nickname
-                    if (safeUser === nickname) {
-                        item.style.fontWeight = 'bold';
-                    }
+                    // Optionally highlight own nickname based on current_user passed if needed
+                    // if (safeUser === '{{ current_user.username }}') {
+                    //     item.style.fontWeight = 'bold';
+                    // }
                     userList.appendChild(item);
                 });
             } else {
@@ -124,17 +110,16 @@
             }
         });
 
-         // Optional: Handle errors from server (e.g., nickname taken if we re-add that check)
         socket.on('error', (data) => {
             alert(`Server Error: ${data.msg}`);
         });
 
-        // Optional: Log disconnection for debugging
         socket.on('disconnect', (reason) => {
+             // ... (disconnect handling remains same) ...
             console.log('Socket disconnected:', reason);
             const item = document.createElement('li');
             item.className = 'status-message';
-            item.textContent = 'You have been disconnected. Please refresh to rejoin.';
+            item.textContent = 'You have been disconnected.';
             messages.appendChild(item);
             messages.scrollTop = messages.scrollHeight;
         });

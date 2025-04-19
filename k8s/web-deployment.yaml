@@ -16,26 +16,42 @@ spec:
         app: chat-web
     spec:
       containers:
-      - name: web
-        image: howletcute/chat-app:latest # Your image from Docker Hub
-        ports:
-        - containerPort: 5000 # The port gunicorn listens on
-        env:
-          # Environment variables for the application
-          - name: REDIS_HOST
-            value: "redis-service" # Connect to the Redis K8s Service name
-          - name: REDIS_PORT
-            value: "6379"
-          - name: SECRET_KEY
-            # In production use K8s Secrets: kubectl create secret generic flask-secret --from-literal=secret-key='YOUR_REAL_SECRET'
-            value: "a_secret_key_for_k8s_deployment_!@#" # Replace with a real secret later
-          - name: PYTHONUNBUFFERED # Already set in Dockerfile, but can be explicit
-            value: "1"
-        # Add basic resource requests/limits
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m" # 0.1 CPU
-          limits:
-            memory: "256Mi"
-            cpu: "250m"
+        - name: web
+          image: howletcute/chat-app:latest # Your image from Docker Hub
+          ports:
+            - containerPort: 5000 # The port gunicorn listens on
+          env:
+            # Environment variables for the application
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret # Reference the K8s secret
+                  key: POSTGRES_USER # Key within the secret
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: DB_HOST
+              value: "postgres-svc" # Use the K8s service name for Postgres
+            - name: DB_NAME
+              value: "chat_db" # The DB name we chose in postgres-deployment.yaml
+            - name: DATABASE_URL # Often used by SQLAlchemy/Flask-Migrate (derived in app.py now)
+              value: "" # Value is constructed in app.py, but variable could be set here if preferred
+            - name: REDIS_HOST
+              value: "redis-service" # Connect to the Redis K8s Service name
+            - name: REDIS_PORT
+              value: "6379"
+            - name: SECRET_KEY
+              # In production use K8s Secrets: kubectl create secret generic flask-secret --from-literal=secret-key='YOUR_REAL_SECRET'
+              value: "a_secret_key_for_k8s_deployment_!@#" # Replace with a real secret later
+            - name: PYTHONUNBUFFERED # Already set in Dockerfile, but can be explicit
+              value: "1"
+          # Add basic resource requests/limits
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m" # 0.1 CPU
+            limits:
+              memory: "256Mi"
+              cpu: "250m"

@@ -1,18 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Enter Chat</title>
-    <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        form { display: flex; flex-direction: column; gap: 10px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <form action="/chat" method="post">
-        <h2>Enter Your Nickname</h2>
-        <input type="text" name="nickname" placeholder="Your nickname" required autocomplete="off">
-        <button type="submit">Enter Chat</button>
-    </form>
-</body>
-</html>
+{% extends "_base.html" %} {% block content %} <h2>Welcome to the Chat App!</h2>
+
+    {% if current_user.is_authenticated %}
+        <p>Hello, {{ current_user.username }}!</p>
+        <p><a href="{{ url_for('main.chat') }}">Go to Chat</a></p> {# Change 'chat' to 'main.chat' #}
+        {% else %}
+        <p>Please login or register to join the chat.</p>
+        {% endif %}
+{% endblock content %}

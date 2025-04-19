@@ -1,7 +1,7 @@
 # Dockerfile
 
 # 1. Use an official Python runtime
-FROM python:3.9-slim
+FROM python:3.12-slim-bookworm
 
 # 2. Set the working directory
 WORKDIR /app
@@ -24,4 +24,4 @@ ENV PYTHONUNBUFFERED=1
 # Bind to 0.0.0.0:5000 inside the container
 # Use 1 worker (-w 1) for simplicity for now
 # 'app:app' tells gunicorn to load the 'app' instance from the 'app.py' file
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:5000", "run:app"]
