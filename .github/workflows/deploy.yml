@@ -88,15 +88,15 @@ jobs:
       
         # --- ADDED: Update image tag in deployment manifest ---
       - name: Update Kubernetes deployment image tag
-        # Use sed to replace ':latest' with the specific commit SHA tag
-        # Assumes your Docker Hub username is in secrets.DOCKERHUB_USERNAME
+          # Use sed to replace ':latest' with the specific FULL commit SHA tag
         run: |
-          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/chat-app:${{ steps.vars.outputs.sha_short }}"
-          echo "Updating deployment image to: ${IMAGE_NAME}"
-          # Modify the k8s/web-deployment.yaml file in place
-          sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/chat-app:latest|image: ${IMAGE_NAME}|g" k8s/web-deployment.yaml
-          echo "Manifest after update:"
-          cat k8s/web-deployment.yaml # Optional: print modified file content  
+            # Use the full SHA directly from the GitHub context
+            IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/chat-app:${{ github.sha }}"
+            echo "Updating deployment image to: ${IMAGE_NAME}"
+            # Modify the k8s/web-deployment.yaml file in place
+            sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/chat-app:latest|image: ${IMAGE_NAME}|g" k8s/web-deployment.yaml
+            echo "Manifest after update:"
+            cat k8s/web-deployment.yaml # Optional: print modified file
       
         # Deploy application manifests
       - name: Deploy to GKE with kubectl
