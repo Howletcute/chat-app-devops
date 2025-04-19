@@ -47,7 +47,7 @@ jobs:
           no-cache: true # Forces a build without using cache layers
           pull: true     # Always attempt to pull newer base images 
           build-args: |
-            APP_VERSION=${{ github.ref_name }} # Pass Branch or Tag name as version
+            APP_VERSION=${{ github.ref_name }} 
 
   # --- NEW DEPLOY JOB FOR GKE ---
   deploy-to-gke:
