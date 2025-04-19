@@ -42,24 +42,24 @@
             <a href="{{ url_for('main.index') }}">Home</a>
             <a href="{{ url_for('main.about') }}">About</a>
             {% if current_user.is_authenticated %}
+            {# Links for logged-in users #}
             <a href="{{ url_for('main.chat') }}">Chat</a>
             <a href="{{ url_for('main.settings') }}">Settings</a>
             <a href="{{ url_for('auth.logout') }}">Logout ({{ current_user.username }})</a>
             {% else %}
-            <a href="{{ url_for('main.about') }}">About</a>
-            <a href="{{ url_for('auth.register') }}">Register</a>
-            {% endif %}
-        </div>
-        <div class="theme-switch-wrapper">
-            <span>☀️</span>
-            <label class="theme-switch" for="theme-toggle">
-                <input type="checkbox" id="theme-toggle" />
-                <div class="slider"></div>
-            </label>
-            <span>🌙</span>
-        </div>
+            {# Links for logged-out users - CORRECTED #}
+            <a href="{{ url_for('auth.login') }}">Login</a> {# <-- Added Login link #} <a
+                href="{{ url_for('auth.register') }}">Register</a> {# <-- Kept Register link #} {# Removed duplicate
+                    About link from here #} {% endif %} </div>
+                    <div class="theme-switch-wrapper">
+                        <span>☀️</span>
+                        <label class="theme-switch" for="theme-toggle">
+                            <input type="checkbox" id="theme-toggle" />
+                            <div class="slider"></div>
+                        </label>
+                        <span>🌙</span>
+                    </div>
     </nav>
-
     <main class="content-wrapper">
         <div class="container">
             {% with messages = get_flashed_messages(with_categories=True) %}
