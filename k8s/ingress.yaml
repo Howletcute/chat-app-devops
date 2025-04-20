@@ -12,11 +12,11 @@ spec:
   tls:
   - hosts:
     # The domain we want TLS for
-    - howlet-chat.duckdns.org
+    - chat.howlet.site
     # cert-manager will store the created certificate in this secret
     secretName: howlet-chat-tls-secret
   rules:
-  - host: howlet-chat.duckdns.org # Listen for traffic for this host
+  - host: chat.howlet.site # Listen for traffic for this host
     http:
       paths:
       - path: / # Match all paths

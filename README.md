@@ -1,35 +1,39 @@
-# Real-Time Chat Application (v1.1.0 - GKE Deployment)
+# Real-Time Chat Application (GKE Deployment Template)
 
 ## Description
 
-This project implements a simple, anonymous real-time chat application using Flask-SocketIO and Redis. Users can choose a nickname, enter a common chat room, send messages, and see who else is online.
+This project provides a template for deploying a real-time chat application using Flask-SocketIO, Redis, and PostgreSQL onto Google Kubernetes Engine (GKE).
+It includes user authentication, basic chat features, and customization options.
+Infrastructure is provisioned via Terraform, deployment can be automated via GitHub Actions, and TLS/HTTPS is handled by cert-manager and Nginx Ingress. This guide assumes deployment to a custom domain.
 
-Version 1.1.0 represents the migration of the deployment from a single VM to **Google Kubernetes Engine (GKE)**. It runs on a **GKE Standard Zonal cluster** (starting with an `e2-medium` node pool with autoscaling) provisioned via Terraform. Ingress is handled by **Nginx Ingress Controller**, and TLS/HTTPS is automated using **cert-manager** with Let's Encrypt certificates. Deployment is automated via **GitHub Actions**.
+**Note on Cost:** The default Terraform configuration uses resources (like `e2-medium` nodes) that may require a GCP account with active billing and potentially the Free Trial credit to run without incurring significant costs. Adjust Terraform variables (e.g., `gke_node_machine_type`) based on your budget and needs.
 
-**Note on Cost:** This configuration requires a GCP account with the **$300 Free Trial credit** activated to run without incurring costs during the trial period, as the `e2-medium` node(s) and GCP Load Balancer provisioned by Nginx Ingress exceed the limits of the basic Always Free tier.
+## Features (Based on v1.2.0)
 
-## Features (v1.1.0)
-
-* Anonymous login using a chosen nickname (duplicates allowed).
-* Single, common chat room for all connected users.
-* Real-time message broadcasting using WebSockets (Flask-SocketIO).
-* Display list of currently online users (updates on join/leave).
-* Basic message history loaded on joining.
-* Deployment automated via CI/CD (GitHub Actions).
-* Served over HTTPS with a valid certificate.
+* User registration and login functionality using PostgreSQL.
+* Password hashing using Werkzeug.
+* Session management using Flask-Login.
+* Database migrations using Flask-Migrate.
+* Dark mode theme toggle with localStorage persistence.
+* Nickname color customization stored in the database.
+* Dedicated `/settings` page for user customization.
+* About page (`/about`) displaying build version/ref.
+* Real-time chat via Flask-SocketIO, online user list, basic history.
+* Example CI/CD pipeline using GitHub Actions for automated deployment.
+* Containerized application with database migrations applied on startup via entrypoint script.
 
 ## Technology Stack
 
-* **Backend:** Python, Flask, Flask-SocketIO, Eventlet, Gunicorn
-* **Database/Cache:** Redis
+* **Backend:** Python, Flask, Flask-SocketIO, Eventlet, Gunicorn, Flask-Login, Flask-SQLAlchemy, Flask-Migrate, WTForms, Werkzeug
+* **Database/Cache:** PostgreSQL, Redis
 * **Containerization:** Docker
 * **Orchestration:** Kubernetes (GKE Standard)
 * **Infrastructure as Code:** Terraform
 * **Cloud Provider:** Google Cloud Platform (GCP)
-* **CI/CD:** GitHub Actions
+* **CI/CD:** GitHub Actions (Example)
 * **Ingress:** Nginx Ingress Controller
 * **TLS Certificates:** Cert-Manager + Let's Encrypt
-* **Package Management:** Helm (for Nginx Ingress, Cert-Manager)
+* **Package Management:** Helm (for Nginx Ingress, Cert-Manager), Pip
 * **Version Control:** Git
 
 ## Prerequisites
@@ -42,23 +46,23 @@ Before you begin, ensure you have the following installed and configured:
 4.  **Google Cloud SDK (`gcloud`):** For interacting with GCP and GKE. Needs `gke-gcloud-auth-plugin`. ([Install gcloud](https://cloud.google.com/sdk/docs/install), then run `gcloud components install gke-gcloud-auth-plugin`)
 5.  **`kubectl` CLI:** For interacting with the Kubernetes cluster. ([Install kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/))
 6.  **Helm CLI:** For installing cluster add-ons (Nginx, Cert-Manager). ([Install Helm](https://helm.sh/docs/intro/install/))
-7.  **Google Cloud Platform (GCP) Account:** With an active project, **Billing Enabled**, and ideally the **$300 Free Trial activated** to cover resource costs.
-8.  **Docker Hub Account:** To store and retrieve the application's Docker image.
-9.  **GitHub Account:** To host the repository and use GitHub Actions.
-10. **DuckDNS Account & Subdomain:** A free subdomain (e.g., `your-name.duckdns.org`) registered at [DuckDNS](https://www.duckdns.org/).
+7.  **Google Cloud Platform (GCP) Account:** With an active project and Billing Enabled.
+8.  **Docker Hub Account (or other registry):** To store and retrieve the application's Docker image.
+9.  **GitHub Account (optional):** If using the example GitHub Actions workflow.
+10. **Custom Domain Name:** A domain name you own and can manage DNS for.
 
 ## Running Locally
 
 1.  **Clone the repository:**
     ```bash
-    # Replace with the actual HTTPS or SSH URL of your repository
-    git clone [https://github.com/Howletcute/chat-app-devops.git](https://github.com/Howletcute/chat-app-devops.git)
+    git clone [https://github.com/Howletcute/chat-app-devops.git](https://github.com/Howletcute/chat-app-devops.git) # Or your fork
     cd chat-app-devops
     ```
-2.  **Create Environment File:** Create a `.env` file in the project root:
+2.  **Create Environment File:** Create a `.env` file in the project root (see `config.py` for variables like `SECRET_KEY`, `SENDGRID_API_KEY`, DB/Redis details if not using defaults):
     ```dotenv
-    # .env
-    SECRET_KEY=a_local_secret_dev_key_!@#
+    # .env (Example for local development)
+    SECRET_KEY=a_super_secret_local_key_!@#
+    # Add other overrides if needed (e.g., SENDGRID_API_KEY)
     ```
 3.  **Build and Run with Docker Compose:**
     ```bash
@@ -66,52 +70,53 @@ Before you begin, ensure you have the following installed and configured:
     ```
 4.  **Access:** Open your web browser to `http://localhost:5001`.
 
-## Deploying to GCP (GKE Standard with Free Trial)
+## Deploying to GCP GKE
 
-This deploys the application to a GKE Standard Zonal cluster using resources covered by the GCP Free Trial credit.
+This guide outlines deploying the application to a GKE Standard cluster.
 
 **1. Prerequisites Check:**
 
-* Ensure all items in the [Prerequisites](#prerequisites) section are met, especially the GCP account with Free Trial active and Billing enabled.
+* Ensure all items in the [Prerequisites](#prerequisites) section are met.
 
 **2. GCP Setup:**
 
 * Create a unique Google Cloud Storage (GCS) bucket for Terraform state (ensure **Object Versioning** is enabled):
     ```bash
-    # Replace placeholders!
-    gcloud storage buckets create gs://<YOUR-UNIQUE-BUCKET-NAME-gke> --project=<YOUR-GCP-PROJECT-ID> --location=<GCP_REGION e.g., us-central1> --uniform-bucket-level-access --versioning
+    # Replace placeholders with your values!
+    gcloud storage buckets create gs://<YOUR-UNIQUE-BUCKET-NAME-tfstate> --project=<YOUR-GCP-PROJECT-ID> --location=<GCP_REGION> --uniform-bucket-level-access --versioning
     ```
 
 **3. Terraform Infrastructure Setup:**
 
 * **Clone Repository:** If not already done.
-* **Configure Backend:** Edit `terraform/backend.tf` and set the `bucket` name to the GCS bucket you created.
-* **Configure Variables:** Create `terraform/terraform.tfvars` with your GCP Project ID and your current public IP (for potential firewall rules, though less critical now):
+* **Configure Backend:** Edit `terraform/backend.tf` and set the `bucket` name to the GCS bucket you just created.
+* **Configure Variables:** Create `terraform/terraform.tfvars` or set environment variables (e.g., `TF_VAR_gcp_project_id`):
     ```hcl
-    # terraform/terraform.tfvars
-    gcp_project_id = "<YOUR-GCP-PROJECT-ID>" # e.g., howlet-chat-app
-    ssh_source_ip  = "<YOUR_PUBLIC_IP>/32"
+    # terraform/terraform.tfvars (Example)
+    gcp_project_id = "<YOUR-GCP-PROJECT-ID>"
+    gcp_region     = "<YOUR_GCP_REGION>" # e.g., us-central1
+    gcp_zone       = "<YOUR_GCP_ZONE>"   # e.g., us-central1-a
+    # Adjust gke_node_machine_type if needed
     ```
-    *(Note: Set the `gcp_region` and `gcp_zone` defaults in `variables.tf` if different from `us-central1`/`us-central1-a`. Set `gke_node_machine_type` to `e2-medium`)*
 * **Initialize & Apply:** Navigate to the `terraform` directory:
     ```bash
     cd terraform
     terraform init -upgrade
-    terraform plan # Review plan: should create GKE Standard Cluster + Node Pool
-    terraform apply # Confirm with 'yes'. Takes several minutes.
+    terraform plan # Review plan
+    terraform apply # Confirm with 'yes'
     ```
 * **Configure `kubectl`:** Copy the `kubeconfig_command` value from the `terraform apply` output and run it in your terminal. Verify with `kubectl get nodes`.
 
-**4. Install Cluster Add-ons (Manual Helm Steps for v1.1.0):**
+**4. Install Cluster Add-ons & Configure DNS:**
 
-*These steps install prerequisites required *before* the application deployment pipeline can succeed.*
-    * **Install Nginx Ingress:**
+*These steps install prerequisites within the cluster needed for Ingress and TLS.*
+    * **Install Nginx Ingress Controller:**
         ```bash
         helm repo add ingress-nginx [https://kubernetes.github.io/ingress-nginx](https://kubernetes.github.io/ingress-nginx)
         helm repo update
         helm install ingress-nginx ingress-nginx/ingress-nginx --namespace default --create-namespace
         ```
-    * **Install Cert-Manager:** (Using the specific fix for GKE)
+    * **Install Cert-Manager:** (Handles Let's Encrypt certificates)
         ```bash
         helm repo add jetstack [https://charts.jetstack.io](https://charts.jetstack.io)
         helm repo update
@@ -122,75 +127,108 @@ This deploys the application to a GKE Standard Zonal cluster using resources cov
           --set installCRDs=true \
           --set global.leaderElection.namespace=cert-manager
         ```
-    * **Get Nginx External IP:** Wait a few minutes, then get the IP:
+    * **Get Nginx Load Balancer IP:** Wait a few minutes for an external IP to be assigned:
         ```bash
-        kubectl get service ingress-nginx-controller -n default
+        kubectl get service ingress-nginx-controller -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
         ```
-    * **Update DNS:** Go to DuckDNS and update the IP address for your subdomain (`howlet-chat.duckdns.org`) to point to the External IP obtained above.
+        Copy the resulting IP address.
+    * **Configure DNS:** Go to your domain registrar or DNS provider where your custom domain (`<your-domain-name>`) is managed. Create an **'A' record** for the hostname you intend to use for the application (e.g., `chat` for `chat.<your-domain-name>` or `@` for the root `<your-domain-name>`) and point it to the External IP address you obtained above. Allow time for DNS changes to propagate.
 
-**5. GitHub Actions Setup (Secrets):**
+**5. Prepare Kubernetes Secrets:**
 
-* This needs to be done on the GitHub repository where the Actions workflow will run.
-* **Create GCP Service Account & Key:** Create a Service Account (e.g., `github-actions-gke-deployer`), grant it `Kubernetes Engine Developer` and `Service Account User` roles, and create/download a JSON key.
-* **Add GitHub Secrets:** In repository Settings > Secrets and variables > Actions, add:
-    * `DOCKERHUB_USERNAME`: Your Docker Hub username.
-    * `DOCKERHUB_TOKEN`: Your Docker Hub access token.
-    * `GCP_SA_KEY`: The entire JSON content of the GCP Service Account key file.
-    * `GCP_PROJECT_ID`: Your GCP Project ID (e.g., `howlet-chat-app`).
-    * `GCP_ZONE`: The GCP zone used for the cluster (e.g., `us-central1-a`).
-    * `GKE_CLUSTER_NAME`: The name of your GKE cluster (e.g., `chat-app-std-cluster`).
+* This application requires Kubernetes Secrets for sensitive configuration like the Flask `SECRET_KEY`, PostgreSQL credentials, and potentially third-party API keys (e.g., SendGrid).
+* You must create these secrets manually in your GKE cluster *before* deploying the application. Example using `kubectl`:
+    ```bash
+    # Example for Flask Secret Key
+    kubectl create secret generic <your-flask-secret-name> --from-literal=SECRET_KEY='<generate-a-strong-random-secret-key>'
 
-**6. Deployment Trigger:**
+    # Example for PostgreSQL Credentials
+    kubectl create secret generic <your-postgres-secret-name> \
+      --from-literal=POSTGRES_USER='<your-db-user>' \
+      --from-literal=POSTGRES_PASSWORD='<your-db-password>'
 
-* Pushing changes to the `main` branch triggers the GitHub Actions workflow defined in `.github/workflows/deploy.yml`.
-* The pipeline builds the `howletcute/chat-app:latest` image, pushes it, authenticates to GKE, and deploys the application using `kubectl apply -f k8s/`.
+    # Example for SendGrid API Key (if using email features)
+    # kubectl create secret generic <your-sendgrid-secret-name> --from-literal=SENDGRID_API_KEY='<your-actual-sendgrid-key>'
+    ```
+* **Important:** Ensure the secret names and keys match what's referenced in the `k8s/web-deployment.yaml` and `k8s/postgres-deployment.yaml` files (or update the YAMLs to reference the secret names you create).
+
+**6. Configure and Deploy Application:**
+
+* **Update Ingress:** Modify `k8s/ingress.yaml`. Set the `host` fields under `spec.rules` and `spec.tls` to your desired application hostname (e.g., `chat.<your-domain-name>`). Set `spec.tls.secretName` to a name for cert-manager to store the certificate (e.g., `<your-app-hostname>-tls-secret`).
+    ```yaml
+    # k8s/ingress.yaml (Example Snippet - REPLACE PLACEHOLDERS)
+    # ...
+    spec:
+      tls:
+      - hosts:
+        - <your-app-hostname> # e.g., chat.your-domain.com
+        secretName: <your-tls-secret-name> # Use a descriptive name; cert-manager will create it
+      rules:
+      - host: <your-app-hostname> # e.g., chat.your-domain.com
+    # ...
+    ```
+* **Update Image Name (If necessary):** Ensure the `image` field in `k8s/web-deployment.yaml` points to your built image in your container registry (e.g., `your-dockerhub-username/chat-app:<tag>`).
+* **Apply Manifests:** Deploy the application components:
+    ```bash
+    # Apply secrets first if not already done
+    kubectl apply -f k8s/postgres-pvc.yaml
+    # kubectl apply -f <your-secret-manifests.yaml> # Or apply secrets created above
+    kubectl apply -f k8s/postgres-deployment.yaml
+    kubectl apply -f k8s/postgres-service.yaml
+    kubectl apply -f k8s/redis-deployment.yaml
+    kubectl apply -f k8s/redis-service.yaml
+    kubectl apply -f k8s/cluster-issuer.yaml # Ensure email is correct
+    kubectl apply -f k8s/ingress.yaml # Apply your updated ingress
+    kubectl apply -f k8s/web-deployment.yaml # Deploy the app
+    kubectl apply -f k8s/web-service.yaml
+    ```
 
 **7. Accessing the Application:**
 
-* After the pipeline runs successfully, allow a minute or two for the Let's Encrypt certificate to be issued by cert-manager.
-* Access the application via HTTPS: `https://howlet-chat.duckdns.org` (replace with your actual domain).
+* After deployment, allow time for DNS propagation and for cert-manager to issue the TLS certificate (check with `kubectl get certificate`).
+* Access the application via HTTPS at your configured hostname (e.g., `https://<your-app-hostname>`).
 
-## Project Structure (v1.1.0)
+**8. CI/CD (Optional - GitHub Actions Example):**
+
+* The `.github/workflows/deploy.yml` provides an example pipeline.
+* **Setup:**
+    * Create a GCP Service Account with appropriate roles (`Kubernetes Engine Developer`, `Service Account User`). Download its JSON key.
+    * Add required secrets to your GitHub repository's Actions secrets (see workflow file for names like `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `GCP_SA_KEY`, `GCP_PROJECT_ID`, `GCP_ZONE`, `GKE_CLUSTER_NAME`, etc.).
+* **Functionality:** The example pipeline builds the Docker image, tags it with the commit SHA, pushes it to Docker Hub, authenticates to GKE, updates the image tag in `k8s/web-deployment.yaml` (using `sed` - **consider alternatives like Kustomize or Helm for better practice**), and applies the `k8s` manifests. Adapt this pipeline to your needs.
+
+## Project Structure
 
 ```text
 .
-├── .github/workflows/      # GitHub Actions CI/CD pipeline for GKE
+├── .github/workflows/      # Example GitHub Actions CI/CD pipeline
 │   └── deploy.yml
-├── ansible/                # Ansible (Not used for GKE deployment in v1.1)
-│   ├── configure-vm.yml
-│   ├── deploy-app.yml
-│   └── inventory.ini
+├── app/                    # Flask application package
+│   └── ... (see detailed structure above)
 ├── k8s/                    # Kubernetes Manifests
-│   ├── cluster-issuer.yaml
-│   ├── ingress.yaml
-│   ├── redis-deployment.yaml
-│   ├── redis-service.yaml
-│   ├── web-deployment.yaml
-│   └── web-service.yaml
-├── templates/              # Flask HTML templates
-│   ├── chat.html
-│   └── index.html
+│   └── ...
+├── migrations/             # Alembic database migrations
+│   └── ...
+├── static/                 # Static assets (CSS, JS)
+│   └── ...
+├── templates/              # Jinja2 HTML templates
+│   └── ...
 ├── terraform/              # Terraform infrastructure code (GKE Cluster/Nodes)
-│   ├── backend.tf
-│   ├── gke.tf              # Contains GKE cluster and node pool definitions
-│   ├── main.tf             # Currently empty or holds non-GKE resources
-│   ├── outputs.tf
-│   ├── providers.tf
-│   └── variables.tf
+│   └── ...
 ├── .env                    # Local environment variables (Gitignored)
 ├── .gitignore
-├── app.py                  # Flask-SocketIO chat application code
-├── Dockerfile              # Docker build instructions for chat app
+├── CHANGELOG.md
+├── config.py               # Flask configuration classes
 ├── docker-compose.yml      # Docker Compose for local development
+├── Dockerfile              # Docker build instructions for chat app
+├── entrypoint.sh           # Container entrypoint (runs migrations)
 ├── README.md               # This file
-└── requirements.txt        # Python dependencies
-
+├── requirements.txt        # Python dependencies
+└── run.py                  # Script to run the Flask development server w/ SocketIO
 
 Future Improvements
-Automate Helm installs via Terraform or GitOps.
-Implement user authentication.
-Add more chat features (private messages, rooms).
-Set up monitoring and logging (Prometheus/Grafana/Cloud Monitoring).
-Use managed Redis (Memorystore) instead of container.
-Add automated tests to CI/CD pipeline.
-Implement more robust secret management (Vault, GCP Secret Manager).
+Implement Email Confirmation & Forgot Password features.
+Enhance Security (Network Policies, Vulnerability Scanning, GCP Secret Manager).
+Implement Structured Logging & Monitoring (Cloud Logging/Monitoring, Prometheus/Grafana).
+Refine CI/CD (Testing stages, Helm/Kustomize for manifests, Staging environment).
+Use managed Database/Redis services (Cloud SQL, Memorystore) instead of containers.
+Improve Kubernetes Secret Management (e.g., Vault, ExternalSecrets operator).

@@ -26,6 +26,14 @@ class Config:
     DB_NAME = os.environ.get('DB_NAME', 'chat_db')
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
+    
+    # --- NEW: Flask-Mail Configuration for SendGrid ---
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.sendgrid.net')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', 'apikey') # SendGrid uses 'apikey' literally
+    MAIL_PASSWORD = os.environ.get('SENDGRID_API_KEY') # Use a specific env var name
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@yourdomain.com') # IMPORTANT: Use an email address from a domain you configure/verify in SendGrid
 
 class DevelopmentConfig(Config):
     """Development configuration."""

@@ -11,3 +11,4 @@ Flask-Login
 Flask-WTF
 email-validator # Needed by Flask-WTF for email fields
 Werkzeug # Explicitly listed, though often a Flask dependency
+Flask-Mail

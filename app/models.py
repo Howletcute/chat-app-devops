@@ -4,6 +4,7 @@ from flask_login import UserMixin
 # Import the db instance created in app/__init__.py
 # The '.' means import from the current package ('app')
 from . import db
+import datetime
 
 class User(UserMixin, db.Model):
     """User model for storing login credentials."""
@@ -15,6 +16,9 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), index=True, unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False) # Store hash, not password
     nickname_color = db.Column(db.String(7), nullable=True, default='#000000') # Stores #RRGGBB hex color
+    email_confirmed = db.Column(db.Boolean, nullable=False, default=False)
+    email_confirmed_on = db.Column(db.DateTime, nullable=True)
+
 
     # email_confirmed = db.Column(db.Boolean, default=False, nullable=False) # Add later if doing email confirmation
 
