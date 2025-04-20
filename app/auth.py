@@ -1,16 +1,14 @@
 # app/auth.py
 import logging
-import datetime # <-- Added import
+import datetime 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
-from itsdangerous import URLSafeTimedSerializer # <-- Added import
+from itsdangerous import URLSafeTimedSerializer
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
-# Import necessary components from the app package
-from . import db, mail # <-- Added mail import
+from . import db, mail 
 from .models import User
-from .forms import LoginForm, RegistrationForm
-# Import Message from Flask-Mail for sending later
-from flask_mail import Message # <-- Added import
+from .forms import LoginForm, RegistrationForm, ForgotPasswordForm, ResetPasswordForm 
+from flask_mail import Message
 
 # Create Blueprint instance named 'auth'
 auth = Blueprint('auth', __name__)
@@ -34,6 +32,23 @@ def confirm_token(token, expiration=3600): # expiration in seconds (1 hour defau
     # but catching them specifically can be useful for logging/debugging
     except Exception as e: 
         logging.warning(f"Confirm token failed: {e}")
+        return False
+    return email
+def generate_password_reset_token(email):
+    serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    # Use a DIFFERENT salt for password reset tokens!
+    return serializer.dumps(email, salt='password-reset-salt') 
+
+def confirm_password_reset_token(token, expiration=3600): # Same expiration default
+    serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    try:
+        email = serializer.loads(
+            token,
+            salt='password-reset-salt', # Use the matching salt
+            max_age=expiration
+        )
+    except Exception as e: 
+        logging.warning(f"Password reset token failed: {e}")
         return False
     return email
 # --- END HELPER FUNCTIONS ---
@@ -196,3 +211,84 @@ def confirm_email(token):
         
     # Redirect to login page after successful confirmation or if already confirmed
     return redirect(url_for('auth.login'))
+@auth.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    """Handles request to reset password."""
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index')) # Already logged in
+        
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        try:
+            user = db.session.scalar(db.select(User).where(User.email == form.email.data))
+            if user:
+                # Generate token and send email ONLY if user exists
+                token = generate_password_reset_token(user.email)
+                reset_url = url_for('auth.reset_password', token=token, _external=True)
+                
+                # Prepare email content (needs template: templates/auth/reset_password_email_template.html)
+                html_body = render_template('auth/reset_password_email_template.html', reset_url=reset_url)
+                text_body = f"Please click the following link to reset your password: {reset_url}\nIf you did not request a password reset, please ignore this email."
+                subject = "Password Reset Request"
+
+                msg = Message(
+                    subject,
+                    sender=current_app.config.get('MAIL_DEFAULT_SENDER'),
+                    recipients=[user.email],
+                    body=text_body,
+                    html=html_body
+                )
+                mail.send(msg)
+                
+            # Flash message regardless of whether user was found or not (prevents email enumeration)
+            flash('If an account with that email exists, a password reset link has been sent.', 'info')
+            return redirect(url_for('auth.login')) # Redirect to login page
+
+        except Exception as e:
+            logging.error(f"Error during forgot password for {form.email.data}: {e}")
+            flash('An error occurred. Please try again later.', 'danger')
+            
+    return render_template('forgot_password.html', title='Forgot Password', form=form)
+
+
+@auth.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """Handles the actual password reset using a token."""
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index')) # Don't allow logged-in users here
+
+    # Verify token first
+    email = confirm_password_reset_token(token)
+    if not email:
+        flash('The password reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('auth.forgot_password')) # Send back to request page
+
+    user = db.session.scalar(db.select(User).where(User.email == email))
+    if not user:
+        # Should not happen if token is valid, but handle edge case
+        flash('User not found.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        try:
+            # Re-verify token just before setting password (belt and suspenders)
+            if not confirm_password_reset_token(token): 
+                 flash('The password reset link is invalid or has expired.', 'danger')
+                 return redirect(url_for('auth.forgot_password'))
+                 
+            user.set_password(form.password.data) # Set the new hashed password
+            # Optional: Force email confirmation again if desired upon password reset?
+            # user.email_confirmed = False 
+            db.session.commit()
+            flash('Your password has been successfully reset. Please log in.', 'success')
+            return redirect(url_for('auth.login'))
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Error resetting password for {email}: {e}")
+            flash('An error occurred while resetting your password. Please try again.', 'danger')
+            # Re-render form if error occurs during commit
+            return render_template('reset_password.html', title='Reset Password', form=form, token=token)
+
+    # Display the reset form on GET request with valid token
+    return render_template('reset_password.html', title='Reset Password', form=form, token=token)
