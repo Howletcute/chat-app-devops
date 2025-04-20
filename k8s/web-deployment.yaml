@@ -54,6 +54,14 @@ spec:
               value: "1"
             - name: FLASK_CONFIG # To ensure production config is used
               value: "prod"
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                  secretKeyRef:
+                    name: sendgrid-secret  # Reference the secret created in Step 1
+                    key: SENDGRID_API_KEY  # Key within the secret
+            - name: MAIL_DEFAULT_SENDER
+              value: "noreply@howlet.site" # <-- REPLACE with your verified sender email from howlet.site!
+              # --- END ADD ---  
 
           # Add basic resource requests/limits
           resources:
