@@ -67,28 +67,37 @@ def register():
             db.session.add(user)
             db.session.commit() # Commit user to DB first
 
-            # --- Generate Token & Prepare Email ---
+             #  --- Generate Token & Send Email ---
             token = generate_confirmation_token(user.email)
-            # _external=True generates an absolute URL needed for email links
-            confirm_url = url_for('auth.confirm_email', token=token, _external=True) 
+            confirm_url = url_for('auth.confirm_email', token=token, _external=True)
             
-            # Prepare email content using a template
-            # (Create templates/auth/confirm_email_template.html later)
+            # Prepare email content using template
             html_body = render_template('auth/confirm_email_template.html', confirm_url=confirm_url) 
-            text_body = f"Please click the following link to confirm your email address: {confirm_url}" # Plain text version
+            text_body = f"Please click the following link to confirm your email address: {confirm_url}" 
             subject = "Please confirm your email address"
 
-            # TODO: Replace the print statement below with actual email sending code using Flask-Mail
-            # Example (will add this properly in the next step):
-            # msg = Message(subject, recipients=[user.email], body=text_body, html=html_body, sender=current_app.config['MAIL_DEFAULT_SENDER'])
-            # mail.send(msg)
-            print(f"DEBUG: Confirmation URL for {user.email}: {confirm_url}") # Print URL for testing currently
+            # --- UNCOMMENT THIS BLOCK (and remove the old print line) ---
+            try:
+                msg = Message(
+                    subject,
+                    # Sender address comes from MAIL_DEFAULT_SENDER config
+                    sender=current_app.config.get('MAIL_DEFAULT_SENDER'), 
+                    recipients=[user.email], # Send to the newly registered user's email
+                    body=text_body,          # Plain text version
+                    html=html_body           # HTML version from template
+                )
+                mail.send(msg) # <--- Make sure this line is now active
+                flash('A confirmation email has been sent. Please check your inbox.', 'success')
+            except Exception as e:
+                # Optional: Add the temporary print statement back here if needed for debugging
+                # print(f"!!! Error during mail.send: {e}") 
+                logging.error(f"Error sending confirmation email to {user.email}: {e}")
+                flash('Registration successful, but could not send confirmation email. Please contact support.', 'warning') 
+            # --- END EMAIL SENDING BLOCK ---
 
-            # --- END Token/Email Prep ---
-
-            flash('A confirmation email has been sent. Please check your inbox.', 'success')
-            # Redirect to the login route within THIS blueprint ('auth.login')
+            # Redirect to login after attempting to send email
             return redirect(url_for('auth.login'))
+        
         
         except Exception as e:
             db.session.rollback() # Rollback DB changes on any error during registration/token generation
@@ -104,32 +113,38 @@ def register():
 def login():
     """Handles user login."""
     if current_user.is_authenticated:
-        return redirect(url_for('main.chat')) # Redirect to main chat view
+        return redirect(url_for('main.chat'))
 
     form = LoginForm()
     if form.validate_on_submit():
         user = db.session.scalar(db.select(User).where(User.username == form.username.data))
-        
+
         # Check if user exists and password matches hash
         if user and user.check_password(form.password.data):
-            # Log the user in using Flask-Login
-            login_user(user, remember=form.remember_me.data)
-            flash('Login successful!', 'success')
-            
-            # Redirect to the page user was trying to access before being sent to login,
-            # or default to the main chat page.
-            next_page = request.args.get('next')
-            # Basic check to prevent redirecting to external sites
-            if next_page and next_page.startswith('/'):
-                return redirect(next_page)
+
+            # --- ADD THIS CHECK ---
+            if user.email_confirmed:
+                # Email is confirmed, proceed with login
+                login_user(user, remember=form.remember_me.data)
+                flash('Login successful!', 'success')
+                
+                next_page = request.args.get('next')
+                if next_page and next_page.startswith('/'):
+                    return redirect(next_page)
+                else:
+                    return redirect(url_for('main.chat'))
             else:
-                # Redirect to the chat route within the 'main' blueprint
-                return redirect(url_for('main.chat'))
-        else:
+                # Email not confirmed
+                flash('Your email address has not been confirmed. Please check your inbox for the confirmation link.', 'warning')
+                # No login_user() call here, redirect back to login page or another relevant page
+                return redirect(url_for('auth.login')) 
+            # --- END ADDED CHECK ---
+
+        else: # User not found or password incorrect
             flash('Login unsuccessful. Please check username and password.', 'danger')
             # Fall through to re-render login form
             
-    # Render login template (make sure templates/login.html exists)
+    # Render login template
     return render_template('login.html', title='Login', form=form)
 
 
