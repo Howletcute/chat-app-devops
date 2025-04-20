@@ -149,10 +149,14 @@ def login():
                 else:
                     return redirect(url_for('main.chat'))
             else:
-                # Email not confirmed
-                flash('Your email address has not been confirmed. Please check your inbox for the confirmation link.', 'warning')
-                # No login_user() call here, redirect back to login page or another relevant page
-                return redirect(url_for('auth.login')) 
+                # Email not confirmed - Rerender login template with resend info
+                flash('Your email address has not been confirmed. Please check your inbox or request a new confirmation link below.', 'warning')
+                # Pass variables to template to show the resend link
+                return render_template('login.html', 
+                                       title='Login', 
+                                       form=form, 
+                                       show_resend_link=True, 
+                                       email_for_resend=user.email) 
             # --- END ADDED CHECK ---
 
         else: # User not found or password incorrect
@@ -292,3 +296,52 @@ def reset_password(token):
 
     # Display the reset form on GET request with valid token
     return render_template('reset_password.html', title='Reset Password', form=form, token=token)
+
+@auth.route('/resend/<email>')
+@login_required # Optional: Or maybe allow unauthenticated if they know their email? Let's require login for now for simplicity.
+                # Alternatively, remove @login_required if link should work even if logged out.
+                # Let's remove it - user is likely clicking this BECAUSE they can't log in.
+# Remove @login_required for this specific route:
+# @login_required 
+def resend_confirmation(email):
+    """Handles request to resend confirmation email."""
+    
+    # Prevent logged-in users from accessing this unnecessarily
+    if current_user.is_authenticated and current_user.email == email:
+         if current_user.email_confirmed:
+              flash('Your email is already confirmed.', 'info')
+              return redirect(url_for('main.index'))
+         # else: fall through to resend if logged in user matches email and not confirmed
+
+    user = db.session.scalar(db.select(User).where(User.email == email))
+
+    if not user:
+        flash('User with that email address not found.', 'warning')
+        return redirect(url_for('auth.login')) # Redirect back to login
+
+    if user.email_confirmed:
+        flash('Your email address is already confirmed. Please log in.', 'success')
+        return redirect(url_for('auth.login')) # Redirect back to login
+
+    # If user exists and email is not confirmed, resend email
+    try:
+        token = generate_confirmation_token(user.email)
+        confirm_url = url_for('auth.confirm_email', token=token, _external=True)
+        html_body = render_template('auth/confirm_email_template.html', confirm_url=confirm_url)
+        text_body = f"Please click the following link to confirm your email address: {confirm_url}"
+        subject = "Please confirm your email address (Resent)"
+
+        msg = Message(
+            subject,
+            sender=current_app.config.get('MAIL_DEFAULT_SENDER'),
+            recipients=[user.email],
+            body=text_body,
+            html=html_body
+        )
+        mail.send(msg)
+        flash('A new confirmation email has been sent. Please check your inbox.', 'success')
+    except Exception as e:
+        logging.error(f"Error resending confirmation email to {user.email}: {e}")
+        flash('An error occurred while trying to resend the confirmation email. Please try again later.', 'danger')
+
+    return redirect(url_for('auth.login')) # Redirect to login page regardless of outcome

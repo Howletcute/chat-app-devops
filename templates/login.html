@@ -1,34 +1,41 @@
 {% extends "_base.html" %}
 
 {% block content %}
-    <h2>Login</h2>
-    <form method="POST" action="">
-        {{ form.hidden_tag() }} <div>
-            {{ form.username.label }}<br>
-            {{ form.username(size=30) }}<br>
-            {% for error in form.username.errors %}
-                <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </div>
-        <br>
-        <div>
-            {{ form.password.label }}<br>
-            {{ form.password(size=30) }}<br>
-            {% for error in form.password.errors %}
-                <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </div>
-        <br>
-        <div>
-            {{ form.remember_me() }} {{ form.remember_me.label }}
-        </div>
-        <br>
-        <div>
-            {{ form.submit() }}
-        </div>
-    </form>
+<h2>Login</h2>
+<form method="POST" action="">
+    {{ form.hidden_tag() }} <div>
+        {{ form.username.label }}<br>
+        {{ form.username(size=30) }}<br>
+        {% for error in form.username.errors %}
+        <span style="color: red;">[{{ error }}]</span><br>
+        {% endfor %}
+    </div>
     <br>
-    <p>Need an account? <a href="{{ url_for('auth.register') }}">Register here</a></p> {# Change 'register' to 'auth.register' #}
-    <p><a href="{{ url_for('auth.forgot_password') }}">Forgot Password?</a></p>
+    <div>
+        {{ form.password.label }}<br>
+        {{ form.password(size=30) }}<br>
+        {% for error in form.password.errors %}
+        <span style="color: red;">[{{ error }}]</span><br>
+        {% endfor %}
+    </div>
+    <br>
+    <div>
+        {{ form.remember_me() }} {{ form.remember_me.label }}
+    </div>
+    <br>
+    <div>
+        {{ form.submit() }}
+    </div>
+</form>
+<br>
+{% if show_resend_link %}
+<p style="color: orange; border: 1px solid orange; padding: 5px;"> {# Simple styling for visibility #}
+    Your email address isn't confirmed.
+    <a href="{{ url_for('auth.resend_confirmation', email=email_for_resend) }}">Resend confirmation email?</a>
+</p>
+{% endif %}
+<p>Need an account? <a href="{{ url_for('auth.register') }}">Register here</a></p> {# Change 'register' to
+'auth.register' #}
+<p><a href="{{ url_for('auth.forgot_password') }}">Forgot Password?</a></p>
 
-    {% endblock content %}
+{% endblock content %}
