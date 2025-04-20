@@ -6,6 +6,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-04-20
+### Added
+- Email confirmation for new user registration:
+    - Sends confirmation email using Flask-Mail and SendGrid.
+    - Uses timed tokens (`itsdangerous`) for secure confirmation links.
+    - Prevents login until email is confirmed.
+    - Added `email_confirmed` and `email_confirmed_on` fields to `User` model and migration.
+- Forgot password functionality:
+    - Route for users to request a password reset email.
+    - Route for users to set a new password using a secure timed token from the email link.
+    - Uses timed tokens (`itsdangerous` with a separate salt) for reset links.
+    - Added `ForgotPasswordForm` and `ResetPasswordForm`.
+
+### Changed
+- Updated SendGrid configuration in `config.py`.
+- Added `Flask-Mail` to `requirements.txt`.
+- Updated Kubernetes `web-deployment.yaml` to include SendGrid API key secret and default sender environment variables.
+
+### Fixed
+- Handled potential `NotNullViolation` when adding `email_confirmed` column to existing users via migration script adjustment.
+- Resolved circular import error between `app/__init__.py` and `app/auth.py`.
+- Fixed `TemplateNotFound` error for email confirmation template.
+- Corrected email sending logic in `/register` route.
+- Debugged and fixed SendGrid `550 Unauthenticated senders not allowed` error by correctly setting environment variables in Kubernetes deployment.
+
 ## [1.2.0] - 2025-04-19
 ### Added
 - User registration and login functionality using PostgreSQL.
