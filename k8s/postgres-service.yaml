@@ -1,13 +1,12 @@
-# k8s/postgres-service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres-svc # Service name used by the web app
+  name: postgres-svc 
 spec:
   selector:
-    app: postgres # Selects pods with label 'app: postgres'
+    app: postgres 
   ports:
     - protocol: TCP
-      port: 5432      # Service listens on 5432
-      targetPort: 5432 # Pod listens on 5432
-  type: ClusterIP # Default type (internal only)
+      port: 5432 
+      targetPort: 5432 
+  type: ClusterIP 

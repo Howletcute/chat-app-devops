@@ -1,12 +1,11 @@
-# k8s/redis-service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis-service # The name the web app will use to connect
+  name: redis-service 
 spec:
   selector:
-    app: redis # Selects pods with label 'app: redis'
+    app: redis 
   ports:
     - protocol: TCP
-      port: 6379      # Port the service listens on
-      targetPort: 6379 # Port the container listens on
+      port: 6379      
+      targetPort: 6379

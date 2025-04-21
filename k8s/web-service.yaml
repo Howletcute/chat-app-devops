@@ -1,14 +1,13 @@
-# k8s/web-service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: web-service # The name the Ingress will target
+  name: web-service 
   labels:
     app: chat-web
 spec:
   selector:
-    app: chat-web # Selects pods with label 'app: chat-web'
+    app: chat-web 
   ports:
     - protocol: TCP
-      port: 80 # Service listens on port 80 (Ingress usually targets port 80)
-      targetPort: 5000 # Route traffic to container's port 5000
+      port: 80 
+      targetPort: 5000

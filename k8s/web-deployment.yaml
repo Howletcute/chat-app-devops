@@ -1,4 +1,3 @@
-# k8s/web-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,7 +5,7 @@ metadata:
   labels:
     app: chat-web
 spec:
-  replicas: 1 # Start with one replica
+  replicas: 1 
   selector:
     matchLabels:
       app: chat-web
@@ -17,57 +16,54 @@ spec:
     spec:
       containers:
         - name: web
-          image: howletcute/chat-app:latest # Your image from Docker Hub
+          image: howletcute/chat-app:latest 
           ports:
-            - containerPort: 5000 # The port gunicorn listens on
+            - containerPort: 5000
           envFrom:
             - secretRef:
-                name: postgres-creds # Load DB_USER, DB_PASS
+                name: postgres-creds
           env:
-            # Environment variables for the application
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: flask-secret # Name of the K8s Secret object
-                  key: SECRET_KEY # Key within the Secret
+                  name: flask-secret
+                  key: SECRET_KEY 
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret # Reference the K8s secret
-                  key: POSTGRES_USER # Key within the secret
+                  name: postgres-secret 
+                  key: POSTGRES_USER 
             - name: DB_PASS
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_PASSWORD
             - name: DB_HOST
-              value: "postgres-svc" # Use the K8s service name for Postgres
+              value: "postgres-svc" 
             - name: DB_NAME
-              value: "chat_db" # The DB name we chose in postgres-deployment.yaml
-            - name: DATABASE_URL # Often used by SQLAlchemy/Flask-Migrate (derived in app.py now)
-              value: "" # Value is constructed in app.py, but variable could be set here if preferred
+              value: "chat_db" 
+            - name: DATABASE_URL 
+              value: "" 
             - name: REDIS_HOST
-              value: "redis-service" # Connect to the Redis K8s Service name
+              value: "redis-service" 
             - name: REDIS_PORT
               value: "6379"
-            - name: PYTHONUNBUFFERED # Already set in Dockerfile, but can be explicit
+            - name: PYTHONUNBUFFERED 
               value: "1"
-            - name: FLASK_CONFIG # To ensure production config is used
+            - name: FLASK_CONFIG
               value: "prod"
             - name: SENDGRID_API_KEY
               valueFrom:
                   secretKeyRef:
-                    name: sendgrid-secret  # Reference the secret created in Step 1
-                    key: SENDGRID_API_KEY  # Key within the secret
+                    name: sendgrid-secret  
+                    key: SENDGRID_API_KEY  
             - name: MAIL_DEFAULT_SENDER
-              value: "noreply@howlet.site" # <-- REPLACE with your verified sender email from howlet.site!
-              # --- END ADD ---  
+              value: "noreply@howlet.site" 
 
-          # Add basic resource requests/limits
           resources:
             requests:
               memory: "128Mi"
-              cpu: "100m" # 0.1 CPU
+              cpu: "100m" 
             limits:
               memory: "256Mi"
               cpu: "250m"

@@ -1,12 +1,10 @@
-# k8s/postgres-pvc.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: postgres-pvc # Persistent Volume Claim name
+  name: postgres-pvc # 
 spec:
   accessModes:
-    - ReadWriteOnce # Can be mounted by only one node at a time (standard for DBs)
+    - ReadWriteOnce 
   resources:
     requests:
-      storage: 1Gi # Request 1 Gibibyte of storage (adjust if needed)
-  # storageClassName: standard # Often uses the default GKE class if omitted
+      storage: 1Gi 
