@@ -186,14 +186,14 @@ def confirm_email(token):
         if not email:
             flash('The confirmation link is invalid or has expired.', 'danger')
             # Redirect to a relevant page, maybe index or registration
-            return redirect(url_for('main.index')) 
+            return redirect(url_for('auth.login')) # Redirect to LOGIN page
 
         user = db.session.scalar(db.select(User).where(User.email == email))
 
         if not user:
              # This shouldn't happen if token is valid, but check anyway
              flash('User associated with this token not found.', 'warning')
-             return redirect(url_for('main.index'))
+             return redirect(url_for('auth.login')) # Redirect to LOGIN page
 
         if user.email_confirmed:
             flash('Account already confirmed. Please login.', 'success')
