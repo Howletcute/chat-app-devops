@@ -32,7 +32,7 @@
         socket.on('connect', () => { console.log('Socket connected on settings page.'); });
 
         if (nicknameColorPicker) {
-            nicknameColorPicker.addEventListener('input', function(event) {
+            nicknameColorPicker.addEventListener('change', function(event) {
                 const newColor = event.target.value;
                 if (colorValueDisplay) {
                      colorValueDisplay.textContent = newColor; // Update hex display live

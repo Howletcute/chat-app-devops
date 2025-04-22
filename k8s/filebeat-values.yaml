@@ -1,0 +1,32 @@
+# filebeat-values.yaml (REVISED v2)
+
+# Define the Elasticsearch output directly
+output.elasticsearch:
+  hosts: ["http://elasticsearch-master.logging.svc.cluster.local:9200"]
+
+# Configure autodiscover for Kubernetes pods
+# Note: Keys like filebeat.autodiscover might need to be quoted if they contain dots,
+# depending on the Helm version and parser, but let's try without first.
+filebeat.autodiscover:
+  providers:
+    - type: kubernetes
+      hints.enabled: true
+      # Optional: Add default JSON config here later if needed
+      # hints.default_config:
+      #   type: container
+      #   paths: ["/var/log/containers/*.log"]
+      #   json.keys_under_root: true
+      #   json.add_error_key: true
+
+# Add Kubernetes metadata processor
+processors:
+  - add_kubernetes_metadata: {}
+
+# Optional: Resource limits
+resources:
+  requests:
+    memory: "100Mi"
+    cpu: "100m"
+  limits:
+    memory: "200Mi"
+    cpu: "200m"

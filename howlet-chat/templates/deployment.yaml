@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "howlet-chat.fullname" . }}
+  labels:
+    # Use standard Helm labels defined in _helpers.tpl
+    {{- include "howlet-chat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      # Use standard selector labels defined in _helpers.tpl
+      {{- include "howlet-chat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        # Use standard selector labels defined in _helpers.tpl for pod labels
+        {{- include "howlet-chat.selectorLabels" . | nindent 8 }}
+    spec:
+      # Use service account defined in values.yaml / _helpers.tpl
+      # (Defaults to 'default' if serviceAccount.create is false and serviceAccount.name is empty)
+      serviceAccountName: {{ include "howlet-chat.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }} # Use the chart name for the container
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http # Name the port for referencing in Service/Probes
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            # --- Environment Variables ---
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.flaskSecretName }}
+                  key: SECRET_KEY
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresSecretName }}
+                  key: POSTGRES_USER
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresSecretName }}
+                  key: POSTGRES_PASSWORD
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sendgridSecretName }}
+                  key: SENDGRID_API_KEY
+            - name: DB_HOST
+              value: {{ .Values.dependencies.postgres.host | quote }}
+            - name: DB_NAME
+              value: {{ .Values.dependencies.postgres.dbName | quote }}
+            - name: REDIS_HOST
+              value: {{ .Values.dependencies.redis.host | quote }}
+            - name: REDIS_PORT
+              value: {{ .Values.dependencies.redis.port | quote }}
+            - name: MAIL_DEFAULT_SENDER
+              value: {{ .Values.mail.defaultSender | quote }}
+            - name: APP_VERSION
+              value: {{ .Values.appVersion | quote }}
+            - name: PYTHONUNBUFFERED # Standard practice
+              value: "1"
+            - name: FLASK_CONFIG # Standard practice
+              value: "prod"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          # --- Probes will be added here later ---
+          # readinessProbe:
+          #   httpGet:
+          #     path: / # TODO: Add proper health check endpoint
+          #     port: http
+          # livenessProbe:
+          #   httpGet:
+          #     path: / # TODO: Add proper health check endpoint
+          #     port: http

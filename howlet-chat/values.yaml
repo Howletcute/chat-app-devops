@@ -1,0 +1,77 @@
+# Default values for howlet-chat chart.
+replicaCount: 1
+
+image:
+  repository: howletcute/chat-app # Your Docker Hub image repository
+  pullPolicy: IfNotPresent
+  # tag is intentionally left empty here, defaulting to .Chart.AppVersion
+  # It will be overridden by the CI/CD pipeline using --set image.tag=...
+  tag: "" 
+
+appVersion: "1.3.0" # App version (can be used elsewhere if needed)
+
+# Define service details
+service:
+  type: ClusterIP
+  port: 80         # Service port exposed within cluster (e.g., for Ingress)
+  targetPort: 5000 # Container port where the app listens
+
+# Names of pre-existing Kubernetes secrets the deployment needs
+# IMPORTANT: These secrets MUST be created separately in the target namespace
+flaskSecretName: flask-secret
+postgresSecretName: postgres-secret # Or use 'postgres-creds' if that's the name you created
+sendgridSecretName: sendgrid-secret
+
+# Mail configuration populated into environment variables
+mail:
+  defaultSender: "noreply@howlet.site" # Your verified SendGrid sender email
+
+# Resource requests and limits for the application container
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Configuration for dependencies (used for setting env vars in deployment)
+dependencies:
+  postgres:
+    # Assuming service is named postgres-svc in the same namespace
+    host: "postgres-svc" 
+    dbName: "chat_db"
+  redis:
+    # Assuming service is named redis-service in the same namespace
+    host: "redis-service" 
+    port: 6379
+
+# Service account configuration (create: false means use default or existing)
+serviceAccount:
+  create: false
+  name: "" # Specify if using an existing, non-default service account
+
+# Ingress configuration (set enabled: true and configure if chart should create ingress)
+ingress:
+  enabled: false
+  # className: "nginx"
+  # annotations: {}
+  #   # kubernetes.io/ingress.class: nginx
+  #   # kubernetes.io/tls-acme: "true"
+  # hosts:
+  #   - host: chart-example.local
+  #     paths:
+  #       - path: /
+  #         pathType: ImplementationSpecific
+  # tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+# Autoscaling configuration (disabled by default)
+autoscaling:
+  enabled: false
+  # minReplicas: 1
+  # maxReplicas: 100
+  # targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
